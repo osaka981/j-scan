@@ -259,13 +259,6 @@ a.tel{color:var(--blue);font-weight:700;text-decoration:none}
   <div id="delLog"></div>
   <p class="note">削除した読取はCSVには含みません。</p>
 
-  <h3>他社として除外した番号</h3>
-  <div id="excl"></div>
-
-  <h3>番号帯の登録（先頭4桁）</h3>
-  <div class="chips" id="chipsP"></div>
-  <p class="note">「他社」に登録した帯は以後スキャン時に赤で止めます。誤登録は × で外せます。</p>
-
   <h3>データ</h3>
   <button class="btn wide" id="btnCsvDay">本日のCSVを書き出す</button>
   <button class="btn wide" id="btnCsvAll">全期間のCSVを書き出す</button>
@@ -282,15 +275,15 @@ const hhmm=ts=>{const d=new Date(ts);return String(d.getHours()).padStart(2,"0")
 const hms=ts=>{const d=new Date(ts);return hhmm(ts)+":"+String(d.getSeconds()).padStart(2,"0");};
 
 let S=load();
-let mode3=true, sheetOpen=false, locked=false, pending=null;
+let mode3=true, sheetOpen=false, locked=false;
 let selMode=false, sel=new Set();
 
-function blank(){ return {date:today(),shifts:[],active:-1,excluded:[],pOK:[],pNG:[],dupLog:[],delLog:[]}; }
+function blank(){ return {date:today(),shifts:[],active:-1,dupLog:[],delLog:[]}; }
 function load(){
   try{
     const raw=localStorage.getItem(KEY); if(!raw) return blank();
     const s=JSON.parse(raw);
-    if(s.date!==today()){ archive(s); const n=blank(); n.pOK=s.pOK||[]; n.pNG=s.pNG||[]; return n; }
+    if(s.date!==today()){ archive(s); return blank(); }
     s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; return s;
   }catch(e){ return blank(); }
 }
@@ -309,7 +302,6 @@ function findFirst(no){
   }
   return null;
 }
-const prefixOf=no=>no.slice(0,4);
 
 let AC=null;
 function beep(freq,ms,vol){
@@ -326,7 +318,7 @@ const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
 function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTimeout(()=>beep(210,380,.1),960); buzz([250,120,250,120,250]); }
 
 /* ---------- 読取 ---------- */
-function handle(raw,forced){
+function handle(raw){
   const no=normalize(raw); if(!no) return;
   if(!inScan()) return;
 
@@ -337,24 +329,12 @@ function handle(raw,forced){
   const first=findFirst(no);
   if(first){ showDup(no,first); return; }
 
-  const p=prefixOf(no);
-  if(S.pNG.includes(p) && !forced){
-    setBand("dup","他社の番号帯です",fmt(no),"先頭"+p+"は他社として登録済み。カウントしていません");
-    beep(180,420,.09); buzz([120,80,120]); pending={no:no,kind:"ng"}; renderBandActions(); return;
-  }
-  if(!S.pOK.includes(p) && !forced){
-    setBand("warn","はじめての番号帯です",fmt(no),"先頭"+p+"。郵便か他社かを選んでください");
-    beep(660,90,.07); setTimeout(()=>beep(660,90,.07),140); buzz(60);
-    pending={no:no,kind:"new"}; renderBandActions(); return;
-  }
   commit(no);
 }
 function commit(no){
   const size=mode3?3:5;
   cur().scans.push({no:no,size:size,ts:Date.now()});
-  const p=prefixOf(no);
-  if(!S.pOK.includes(p)&&!S.pNG.includes(p)) S.pOK.push(p);
-  pending=null; save();
+  save();
   setBand("ok",size+"cm で登録",fmt(no),"この便 "+cur().scans.length+"件");
   beep(size===5?1180:900,size===5?110:60,.06);
   buzz(size===5?[40,40,40]:25);
@@ -381,27 +361,6 @@ function setBand(cls,t,big,sub){
   if(big) b.querySelector(".b2").textContent=big;
   b.querySelector(".b3").textContent=sub||"";
 }
-function renderBandActions(){
-  const a=$("bandA"); if(!a||!pending) return;
-  if(pending.kind==="new"){
-    a.innerHTML='<button class="btn sm" id="pOK">郵便として登録</button><button class="btn sm" id="pNG">他社（ネコポス等）</button>';
-    $("pOK").onclick=()=>{ const p=prefixOf(pending.no); if(!S.pOK.includes(p))S.pOK.push(p); commit(pending.no); };
-    $("pNG").onclick=()=>markOther(pending.no);
-  }else{
-    a.innerHTML='<button class="btn sm" id="pF">やはり郵便なので登録</button>';
-    $("pF").onclick=()=>{ const p=prefixOf(pending.no); S.pNG=S.pNG.filter(x=>x!==p); if(!S.pOK.includes(p))S.pOK.push(p); commit(pending.no); };
-  }
-}
-function markOther(no){
-  const p=prefixOf(no);
-  if(!S.pNG.includes(p))S.pNG.push(p);
-  S.pOK=S.pOK.filter(x=>x!==p);
-  S.excluded.push({no:no,ts:Date.now(),bin:cur().bin});
-  pending=null; save();
-  setBand("dup","他社として除外",fmt(no),"先頭"+p+"を他社に登録。以後は自動で止めます");
-  render();
-}
-
 /* ---------- 画面切替 ---------- */
 function showView(){
   const scan=inScan();
@@ -625,17 +584,6 @@ function openSummary(){
     '<br><span style="font-size:12px;color:#4A5B6B">'+d.kind+" "+hms(d.delTs)+"　読取 "+hms(d.ts)+"（"+d.bin+(d.driver?" / "+d.driver:"")+"）</span></span></div>").join("")
     :'<p class="note">なし</p>';
 
-  $("excl").innerHTML=S.excluded.length
-    ? '<div class="chips">'+S.excluded.map(x=>'<span class="chip no">'+fmt(x.no)+' <span style="font-weight:500;font-size:11px">'+hhmm(x.ts)+'</span></span>').join("")+'</div>'
-    : '<p class="note">なし</p>';
-
-  const cp=$("chipsP");
-  const rows=S.pOK.map(p=>({p:p,ng:false})).concat(S.pNG.map(p=>({p:p,ng:true})));
-  cp.innerHTML=rows.length?rows.map(r=>'<span class="chip'+(r.ng?" no":"")+'">'+r.p+"…"+(r.ng?"（他社）":"（郵便）")+' <button data-p="'+r.p+'">×</button></span>').join(""):'<p class="note">まだ登録がありません</p>';
-  cp.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{
-    const p=b.getAttribute("data-p");
-    S.pOK=S.pOK.filter(x=>x!==p); S.pNG=S.pNG.filter(x=>x!==p); save(); openSummary();
-  });
   openSheet("shSum");
 }
 
@@ -647,7 +595,6 @@ function csvOf(days){
       const base=[d.date,sh.bin,sh.driver,sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
       sh.scans.forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
     });
-    (d.excluded||[]).forEach(x=>{ out+=[d.date,x.bin,"","","","","",x.no,hms(x.ts),"他社除外"].join(",")+"\n"; });
     (d.dupLog||[]).forEach(x=>{ out+=[d.date,x.bin,"","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n"; });
   });
   return out;
