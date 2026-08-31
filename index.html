@@ -270,7 +270,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <!-- 手入力 -->
 <div class="sheet" id="shManual">
   <h2>番号を手入力</h2>
-  <div class="field"><label for="inNo">お問い合わせ番号</label><input id="inNo" type="tel" inputmode="numeric" placeholder="123456789012"></div>
+  <div class="field"><label for="inNo">お問い合わせ番号</label><input id="inNo" type="tel" inputmode="numeric" maxlength="14" placeholder="123456789012（12桁）"></div>
   <div class="rowbtns">
     <button class="btn" id="btnMan3">3cmで登録</button>
     <button class="btn" id="btnMan5">5cmで登録</button>
@@ -286,11 +286,15 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div id="admSummary"></div>
   <h3>便の一覧</h3>
   <div id="admList"></div>
-  <h3>書き出し</h3>
-  <button class="btn wide" id="btnExpNew">未書き出しの便だけ書き出す</button>
+  <h3>提出用（ジェットグループ様へ渡す）</h3>
+  <button class="btn wide" id="btnSubDay">この日の全便を書き出す</button>
+  <button class="btn wide" id="btnSubNew">未書き出しの便だけ書き出す</button>
+  <p class="note">列は 日付・便・ドライバー・サイズ・番号・読取時刻 のみです。便ごとに書き出す場合は、上の一覧から便を開いてください。</p>
+
+  <h3>社内用（記録の追跡まで含む）</h3>
   <button class="btn wide dim" id="btnExpDay">この日を全部書き出す</button>
   <button class="btn wide dim" id="btnExpAll">全期間を書き出す</button>
-  <p class="note">書き出した便には書き出し済みの表示が付きます。全部書き出す場合は、その日の二度読み検知も含みます。</p>
+  <p class="note">二度読みの検知や電話番号まで含みます。先方に渡すものではありません。</p>
   <button class="btn wide dim" data-close>閉じる</button>
 </div>
 
@@ -304,6 +308,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div id="detDup"></div>
   <h3>削除の記録</h3>
   <div id="detDel"></div>
+  <button class="btn wide" id="detSub">この便の提出用CSVを書き出す</button>
   <button class="btn wide dim" id="detBack">一覧に戻る</button>
 </div>
 
@@ -323,8 +328,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <p class="note">削除した読取はCSVには含みません。</p>
 
   <h3>データ</h3>
-  <button class="btn wide" id="btnCsvDay">本日のCSVを書き出す</button>
-  <button class="btn wide" id="btnCsvAll">全期間のCSVを書き出す</button>
+  <button class="btn wide" id="btnSubToday">提出用CSV（本日の全便）</button>
+  <button class="btn wide dim" id="btnCsvDay">社内用CSV（本日）</button>
+  <button class="btn wide dim" id="btnCsvAll">社内用CSV（全期間）</button>
   <button class="btn wide" id="btnNewShift">次の便を始める</button>
   <button class="btn wide dim" data-close>閉じる</button>
 </div>
@@ -358,6 +364,7 @@ const inScan=()=>S.active>=0 && cur() && !cur().closed;
 
 function normalize(v){ return String(v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[^0-9]/g,""); }
 const fmt=no=>no.length===12?no.slice(0,4)+"-"+no.slice(4,8)+"-"+no.slice(8):no;
+const LEN=12;
 function findFirst(no){
   for(let i=0;i<S.shifts.length;i++){
     const hit=S.shifts[i].scans.find(x=>x.no===no);
@@ -420,8 +427,8 @@ function handle(raw){
   const no=normalize(raw); if(!no) return;
   if(!inScan()) return;
 
-  if(!/^\d{11,13}$/.test(no)){
-    setBand("dup","桁数が違います",fmt(no),no.length+"桁。ゆうパケットは11〜13桁です");
+  if(!/^\d{12}$/.test(no)){
+    setBand("dup","12桁ではありません",no,no.length+"桁を読み取りました。カウントしていません");
     beep(220,320,.09); buzz([80,60,80]); return;
   }
   const first=findFirst(no);
@@ -616,7 +623,7 @@ document.addEventListener("keydown",e=>{
   const now=Date.now();
   if(now-bufT>400) buf="";
   bufT=now;
-  if(e.key==="Enter"||e.key==="Tab"){ e.preventDefault(); if(buf.length>=8) handle(buf); buf=""; return; }
+  if(e.key==="Enter"||e.key==="Tab"){ e.preventDefault(); if(buf.length>=6) handle(buf); buf=""; return; }
   if(e.key.length===1){ buf+=e.key; if(buf.length>40)buf=buf.slice(-40); }
 });
 
@@ -711,6 +718,36 @@ $("btnCsvAll").onclick=()=>{
   download("jet_all.csv",out);
 };
 
+/* ---------- 提出用CSV ---------- */
+const ORG="osakakyuhai";
+const SUBHEAD="日付,便,ドライバー,サイズcm,お問い合わせ番号,読取時刻\n";
+function binNo(day,sh){
+  const m=String(sh.bin).match(/(\d+)/);
+  if(m) return m[1];
+  return String(day.shifts.indexOf(sh)+1);
+}
+const ymd=d=>String(d).replace(/-/g,"");
+function csvSubmit(day,shifts){
+  let out=SUBHEAD;
+  shifts.forEach(sh=>{
+    sh.scans.forEach(x=>{
+      out+=[day.date,sh.bin,sh.driver,x.size,x.no,hms(x.ts)].join(",")+"\n";
+    });
+  });
+  return out;
+}
+function submitName(day,shifts){
+  if(shifts.length===1) return ORG+"_"+ymd(day.date)+"_bin"+binNo(day,shifts[0])+".csv";
+  return ORG+"_"+ymd(day.date)+".csv";
+}
+function exportSubmit(day,shifts){
+  if(!shifts.length){ notify("書き出す便がありません",""); return; }
+  const rows=shifts.reduce((n,sh)=>n+sh.scans.length,0);
+  if(!rows){ notify("読取が0件です","この範囲には番号がありません。"); return; }
+  download(submitName(day,shifts),csvSubmit(day,shifts));
+  markExported(day,shifts);
+}
+
 /* ---------- 管理画面 ---------- */
 const ADMIN_PIN="0981";
 let adminOK=false, admArchive=[], admDate=null;
@@ -768,8 +805,10 @@ function renderAdmin(){
   $("admList").querySelectorAll("[data-i]").forEach(r=>r.onclick=()=>openDetail(day,parseInt(r.getAttribute("data-i"),10)));
 }
 
+let detCur=null;
 function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
+  detCur={day:day,sh:sh};
   $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
   $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
@@ -790,6 +829,15 @@ function openDetail(day,i){
   closeSheets(); openSheet("shDetail");
 }
 $("detBack").onclick=()=>{ closeSheets(); openSheet("shAdmin"); };
+$("detSub").onclick=()=>{ if(detCur) exportSubmit(detCur.day,[detCur.sh]); };
+$("btnSubDay").onclick=()=>{ const day=dayByDate(admDate); if(day) exportSubmit(day,day.shifts); };
+$("btnSubNew").onclick=()=>{
+  const day=dayByDate(admDate); if(!day) return;
+  const list=day.shifts.filter(sh=>sh.closed&&!sh.exportedAt);
+  if(!list.length){ notify("未書き出しの便はありません",""); return; }
+  exportSubmit(day,list);
+};
+$("btnSubToday").onclick=()=>exportSubmit(S,S.shifts);
 
 $("btnExpNew").onclick=()=>{
   const day=dayByDate(admDate); if(!day) return;
