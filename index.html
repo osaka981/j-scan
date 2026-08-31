@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="ジェット計数">
+<meta name="theme-color" content="#EEF1F5">
+<meta name="format-detection" content="telephone=no">
 <title>ジェット計数 — ゆうパケット</title>
 <style>
 :root{
@@ -138,6 +144,14 @@ tfoot td{font-weight:700;background:#F2F5F8}
 .rowbtns{display:flex;gap:8px}
 .rowbtns .btn{flex:1;margin-top:8px}
 a.tel{color:var(--blue);font-weight:700;text-decoration:none}
+.askscrim{position:fixed;inset:0;background:rgba(12,20,28,.5);z-index:80;display:none}
+.askscrim.on{display:block}
+.askbox{position:fixed;z-index:81;left:14px;right:14px;top:50%;transform:translateY(-50%);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;
+  display:none;max-height:80dvh;overflow-y:auto;box-shadow:0 8px 28px rgba(12,20,28,.25)}
+.askbox.on{display:block}
+.askbox h2{font-size:17px;margin:0 0 8px}
+.askbox .body{font-size:14px;white-space:pre-line;margin-bottom:12px}
 .lbtns{display:flex;gap:6px;align-items:center;margin:0 2px 8px}
 .lbtns .selinfo{font-size:12px;color:var(--ink-2);font-weight:600;margin-left:auto}
 .btn.danger{color:var(--red);border-color:#E0A9A3;background:var(--red-bg)}
@@ -147,6 +161,17 @@ a.tel{color:var(--blue);font-weight:700;text-decoration:none}
 .row.pick .ck{border-color:var(--blue);background:#BFD6EC}
 .row.del{background:#F1F3F6;border-style:dashed}
 .row.del .no{text-decoration:line-through;color:var(--ink-2)}
+.admrow{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:7px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.admrow .a1{flex:1;min-width:0}
+.admrow .ttl{font-weight:700;font-size:15px}
+.admrow .meta{font-size:12px;color:var(--ink-2);margin-top:2px}
+.admrow .qty{font-size:22px;font-weight:800;letter-spacing:-.01em}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;border:1px solid;margin-top:4px}
+.b-done{color:var(--ok);background:var(--ok-bg);border-color:#A9D3BE}
+.b-todo{color:var(--warn);background:var(--warn-bg);border-color:#DFC97A}
+.b-open{color:var(--blue);background:var(--blue-bg);border-color:#A9C4E0}
+select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;background:var(--card)}
 </style>
 </head>
 <body>
@@ -162,6 +187,7 @@ a.tel{color:var(--blue);font-weight:700;text-decoration:none}
     <div class="prev" id="startPrev"></div>
   </div>
   <button class="btn wide dim" id="btnSumFromStart">本日の集計を見る</button>
+  <button class="btn wide dim" id="btnAdmin">管理画面</button>
 </div>
 
 <!-- ============ 計数画面 ============ -->
@@ -220,6 +246,15 @@ a.tel{color:var(--blue);font-weight:700;text-decoration:none}
 
 <div class="scrim" id="scrim"></div>
 
+<div class="askscrim" id="askScrim"></div>
+<div class="askbox" id="askBox">
+  <h2 id="askTitle"></h2>
+  <div class="body" id="askBody"></div>
+  <div class="field hide" id="askField"><input id="askInput" type="tel" inputmode="numeric" autocomplete="off"></div>
+  <button class="btn wide" id="askOk">OK</button>
+  <button class="btn wide dim" id="askCancel">キャンセル</button>
+</div>
+
 <!-- 重複アラート -->
 <div class="sheet" id="shDup">
   <h2>二度読みを検知しました</h2>
@@ -244,6 +279,34 @@ a.tel{color:var(--blue);font-weight:700;text-decoration:none}
 </div>
 
 <!-- 集計 -->
+<!-- 管理画面 -->
+<div class="sheet" id="shAdmin">
+  <h2>管理画面</h2>
+  <div class="field"><label for="admDay">日付</label><select class="day" id="admDay"></select></div>
+  <div id="admSummary"></div>
+  <h3>便の一覧</h3>
+  <div id="admList"></div>
+  <h3>書き出し</h3>
+  <button class="btn wide" id="btnExpNew">未書き出しの便だけ書き出す</button>
+  <button class="btn wide dim" id="btnExpDay">この日を全部書き出す</button>
+  <button class="btn wide dim" id="btnExpAll">全期間を書き出す</button>
+  <p class="note">書き出した便には書き出し済みの表示が付きます。全部書き出す場合は、その日の二度読み検知も含みます。</p>
+  <button class="btn wide dim" data-close>閉じる</button>
+</div>
+
+<!-- 便の明細 -->
+<div class="sheet" id="shDetail">
+  <h2 id="detTitle">便の明細</h2>
+  <div id="detMeta"></div>
+  <h3>読取</h3>
+  <div id="detScans"></div>
+  <h3>二度読みの記録</h3>
+  <div id="detDup"></div>
+  <h3>削除の記録</h3>
+  <div id="detDel"></div>
+  <button class="btn wide dim" id="detBack">一覧に戻る</button>
+</div>
+
 <div class="sheet" id="shSum">
   <h2>本日の集計</h2>
   <table id="sumTable"><thead><tr><th>便 / ドライバー</th><th>3cm</th><th>5cm</th><th>合計</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
@@ -317,6 +380,41 @@ function beep(freq,ms,vol){
 const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
 function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTimeout(()=>beep(210,380,.1),960); buzz([250,120,250,120,250]); }
 
+/* ---------- 音の初期化（iOS対策） ---------- */
+function unlockAudio(){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended")AC.resume();
+    const o=AC.createOscillator(),g=AC.createGain();
+    g.gain.value=0.0001;o.connect(g);g.connect(AC.destination);o.start();
+    setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},40);
+  }catch(e){}
+}
+document.addEventListener("touchstart",unlockAudio,{once:true});
+document.addEventListener("mousedown",unlockAudio,{once:true});
+
+/* ---------- 確認ダイアログ ---------- */
+let askOpen=false, askOnOk=null;
+function ask(o){
+  askOpen=true; askOnOk=o.onOk||null;
+  $("askTitle").textContent=o.title||"";
+  $("askBody").textContent=o.body||"";
+  $("askBody").style.display=o.body?"":"none";
+  $("askField").className=o.input?"field":"field hide";
+  $("askInput").value="";
+  $("askOk").textContent=o.okText||"OK";
+  $("askOk").className="btn wide"+(o.danger?" danger":"");
+  $("askCancel").className="btn wide dim"+(o.noCancel?" hide":"");
+  $("askScrim").classList.add("on"); $("askBox").classList.add("on");
+  if(o.input) setTimeout(()=>$("askInput").focus(),90);
+}
+function askClose(){ askOpen=false; askOnOk=null; $("askScrim").classList.remove("on"); $("askBox").classList.remove("on"); }
+$("askCancel").onclick=askClose;
+$("askScrim").onclick=askClose;
+$("askOk").onclick=()=>{ const v=$("askInput").value; const cb=askOnOk; askClose(); if(cb) cb(v); };
+$("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("askOk").click(); } });
+const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCancel:true});
+
 /* ---------- 読取 ---------- */
 function handle(raw){
   const no=normalize(raw); if(!no) return;
@@ -385,7 +483,7 @@ function prepStart(){
 }
 $("btnStart").onclick=()=>{
   const drv=$("sDrv").value.trim();
-  if(!drv){ alert("ドライバー名を入力してください。"); return; }
+  if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
   S.shifts.push({id:Date.now(),bin:$("sBin").value.trim()||("第"+(S.shifts.length+1)+"便"),
     driver:drv,tel:$("sTel").value.trim(),startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
   S.active=S.shifts.length-1; save();
@@ -438,9 +536,8 @@ function render(){
       l.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
         const no=b.getAttribute("data-del");
         const x=sh.scans.find(v=>v.no===no); if(!x) return;
-        if(!confirm(fmt(no)+" を削除します。よろしいですか。")) return;
-        removeScans([x],"個別削除");
-        setBand("","1件削除しました",fmt(no),"この便 "+sh.scans.length+"件");
+        ask({title:"この読取を削除します",body:fmt(no)+"　"+x.size+"cm　"+hhmm(x.ts),okText:"削除する",danger:true,
+          onOk:()=>{ removeScans([x],"個別削除"); setBand("","1件削除しました",fmt(no),"この便 "+sh.scans.length+"件"); }});
       });
     }
   }
@@ -461,20 +558,20 @@ $("btnDelAll").onclick=()=>{
   if(selMode){
     if(!sel.size) return;
     const items=sh.scans.filter(x=>sel.has(x.no));
-    if(!confirm("選択した "+items.length+"件 を削除します。よろしいですか。")) return;
-    removeScans(items,"選択削除");
-    selMode=false;
-    setBand("",items.length+"件を削除しました","","この便 "+sh.scans.length+"件");
-    render();
+    ask({title:"選択した "+items.length+"件 を削除します",body:"削除の記録には残ります。",okText:"削除する",danger:true,
+      onOk:()=>{ removeScans(items,"選択削除"); selMode=false;
+        setBand("",items.length+"件を削除しました","","この便 "+sh.scans.length+"件");
+        beep(300,200,.08); buzz([120,80,120]); render(); }});
   }else{
     if(!sh.scans.length) return;
     const n=sh.scans.length;
-    if(!confirm(sh.bin+" の読取 "+n+"件 をすべて削除します。\nこの便の計数は0からやり直しになります。\nよろしいですか。")) return;
-    if(!confirm("本当に全件削除しますか。")) return;
-    removeScans(sh.scans.slice(),"全件削除");
-    setBand("warn","全件削除しました","","この便 0件。最初から読み直してください");
+    ask({title:sh.bin+" の読取 "+n+"件 をすべて削除します",
+      body:"この便の計数は0からやり直しになります。削除の記録には残ります。",okText:"全件削除する",danger:true,
+      onOk:()=>{ ask({title:"本当に全件削除しますか",body:n+"件が消えます。",okText:"削除を実行する",danger:true,
+        onOk:()=>{ removeScans(sh.scans.slice(),"全件削除");
+          setBand("warn","全件削除しました","","この便 0件。最初から読み直してください");
+          beep(300,200,.08); buzz([120,80,120]); }}); }});
   }
-  beep(300,200,.08); buzz([120,80,120]);
 };
 $("btnCall").onclick=()=>{ const t=cur().tel; if(t) location.href="tel:"+t.replace(/[^0-9+]/g,""); };
 
@@ -515,7 +612,7 @@ function notifyLocked(){
 let buf="", bufT=0;
 document.addEventListener("keydown",e=>{
   if(locked){ notifyLocked(); return; }
-  if(sheetOpen||!inScan()) return;
+  if(sheetOpen||askOpen||!inScan()) return;
   const now=Date.now();
   if(now-bufT>400) buf="";
   bufT=now;
@@ -548,10 +645,11 @@ $("btnClose").onclick=()=>{
   const sh=cur();
   if(!sh.scans.length){ setBand("warn","読取が0件です","","締める前に読み取ってください"); return; }
   const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
-  if(!confirm(sh.bin+"（"+sh.driver+"）を締めます。\n3cm "+a+"個 / 5cm "+b+"個 / 計 "+(a+b)+"個\n締め時刻 "+hhmm(Date.now())+"\nよろしいですか。")) return;
-  sh.closed=true; sh.closedAt=Date.now(); save(); openSummary(); showView();
+  ask({title:sh.bin+"（"+sh.driver+"）を締めます",
+    body:"3cm "+a+"個　5cm "+b+"個　計 "+(a+b)+"個\n締め時刻 "+hhmm(Date.now()),okText:"締める",
+    onOk:()=>{ sh.closed=true; sh.closedAt=Date.now(); save(); beep(880,120,.06); openSummary(); showView(); }});
 };
-$("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ alert("先に現在の便を締めてください。"); return; } showView(); };
+$("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
 
 /* ---------- 集計 ---------- */
 function openSummary(){
@@ -588,14 +686,15 @@ function openSummary(){
 }
 
 /* ---------- CSV ---------- */
-function csvOf(days){
-  let out="日付,便,ドライバー,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
-  days.forEach(d=>{
-    d.shifts.forEach(sh=>{
-      const base=[d.date,sh.bin,sh.driver,sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
-      sh.scans.forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
-    });
-    (d.dupLog||[]).forEach(x=>{ out+=[d.date,x.bin,"","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n"; });
+const CSVHEAD="日付,便,ドライバー,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
+function csvBody(day,shifts,withLogs){
+  let out="";
+  shifts.forEach(sh=>{
+    const base=[day.date,sh.bin,sh.driver,sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
+    sh.scans.forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
+  });
+  if(withLogs)(day.dupLog||[]).forEach(x=>{
+    out+=[day.date,x.bin,"","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
   });
   return out;
 }
@@ -605,9 +704,112 @@ function download(name,text){
   a.href=URL.createObjectURL(blob); a.download=name; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),3000);
 }
-$("btnCsvDay").onclick=()=>download("jet_"+S.date+".csv",csvOf([S]));
-$("btnCsvAll").onclick=()=>{ let a=[]; try{a=JSON.parse(localStorage.getItem(AKEY)||"[]");}catch(e){}
-  download("jet_all.csv",csvOf(a.concat([S]))); };
+$("btnCsvDay").onclick=()=>{ download("jet_"+S.date+".csv",CSVHEAD+csvBody(S,S.shifts,true)); markExported(S,S.shifts); };
+$("btnCsvAll").onclick=()=>{
+  let out=CSVHEAD;
+  allDays().forEach(d=>{ out+=csvBody(d,d.shifts,true); markExported(d,d.shifts); });
+  download("jet_all.csv",out);
+};
+
+/* ---------- 管理画面 ---------- */
+const ADMIN_PIN="0981";
+let adminOK=false, admArchive=[], admDate=null;
+
+function readArchive(){ try{ return JSON.parse(localStorage.getItem(AKEY)||"[]"); }catch(e){ return []; } }
+function writeArchive(a){ try{ localStorage.setItem(AKEY,JSON.stringify(a)); }catch(e){} }
+function allDays(){ return readArchive().concat([S]); }
+function dayByDate(d){ if(d===S.date) return S; return admArchive.find(x=>x.date===d)||null; }
+function persistDay(day){ if(day===S){ save(); } else { writeArchive(admArchive); } }
+function markExported(day,shifts){
+  const now=Date.now();
+  shifts.forEach(sh=>{ sh.exportedAt=now; });
+  persistDay(day); if(day===S) save();
+  if($("shAdmin").classList.contains("on")) renderAdmin();
+}
+const cnt=sh=>({a:sh.scans.filter(x=>x.size===3).length,b:sh.scans.filter(x=>x.size===5).length});
+
+$("btnAdmin").onclick=()=>{
+  if(!adminOK){
+    ask({title:"管理画面",body:"暗証番号を入力してください。",input:true,okText:"開く",
+      onOk:v=>{ if(String(v).trim()!==ADMIN_PIN){ notify("暗証番号が違います",""); return; } adminOK=true; openAdmin(); }});
+    return;
+  }
+  openAdmin();
+};
+function openAdmin(){
+  admArchive=readArchive();
+  const days=admArchive.map(d=>d.date).filter(d=>d!==S.date).concat([S.date]).reverse();
+  admDate=admDate&&days.includes(admDate)?admDate:S.date;
+  $("admDay").innerHTML=days.map(d=>'<option value="'+d+'"'+(d===admDate?" selected":"")+">"+d+(d===S.date?"（本日）":"")+"</option>").join("");
+  renderAdmin(); openSheet("shAdmin");
+}
+$("admDay").onchange=()=>{ admDate=$("admDay").value; renderAdmin(); };
+
+function renderAdmin(){
+  const day=dayByDate(admDate);
+  if(!day){ $("admSummary").innerHTML='<p class="note">この日のデータがありません</p>'; $("admList").innerHTML=""; return; }
+  let t3=0,t5=0,todo=0;
+  day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; if(sh.closed&&!sh.exportedAt) todo++; });
+  $("admSummary").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
+    '<div style="font-size:13px;color:#4A5B6B;font-weight:600">'+admDate+" の合計</div>"+
+    '<div style="font-size:30px;font-weight:800;margin-top:2px">'+(t3+t5)+'<span style="font-size:15px;font-weight:600"> 個</span></div>'+
+    '<div style="font-size:14px;margin-top:2px">3cm '+t3+"　5cm "+t5+"　便数 "+day.shifts.length+"</div>"+
+    (todo?'<div class="badge b-todo" style="margin-top:8px">未書き出し '+todo+"便</div>":'<div class="badge b-done" style="margin-top:8px">書き出し済み</div>')+
+    "</div>";
+
+  $("admList").innerHTML=day.shifts.length?day.shifts.map((sh,i)=>{
+    const c=cnt(sh);
+    const bad=sh.closed?(sh.exportedAt?'<span class="badge b-done">書き出し済 '+hhmm(sh.exportedAt)+"</span>":'<span class="badge b-todo">未書き出し</span>')
+                       :'<span class="badge b-open">計数中</span>';
+    return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+sh.bin+"　"+(sh.driver||"")+"</div>"+
+      '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+(sh.tel?"　"+sh.tel:"")+"</div>"+bad+
+      '</div><div class="qty num">'+(c.a+c.b)+"</div></div>";
+  }).join(""):'<p class="note">便がありません</p>';
+  $("admList").querySelectorAll("[data-i]").forEach(r=>r.onclick=()=>openDetail(day,parseInt(r.getAttribute("data-i"),10)));
+}
+
+function openDetail(day,i){
+  const sh=day.shifts[i], c=cnt(sh);
+  $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
+  $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
+    '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
+    '<div style="font-size:20px;font-weight:800;margin-top:4px">3cm '+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"</div>"+
+    (sh.tel?'<div style="margin-top:6px"><a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">'+sh.tel+" に発信</a></div>":"")+
+    (sh.exportedAt?'<div class="badge b-done" style="margin-top:8px">書き出し済 '+hhmm(sh.exportedAt)+"</div>":"")+
+    "</div>";
+  $("detScans").innerHTML=sh.scans.length?sh.scans.slice().reverse().map(x=>
+    '<div class="row"><span class="no num">'+fmt(x.no)+'</span><span class="tag tag'+x.size+'">'+x.size+
+    'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>").join(""):'<p class="note">なし</p>';
+  const dl=(day.dupLog||[]).filter(d=>d.bin===sh.bin);
+  $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
+    fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">検知 '+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
+  const xl=(day.delLog||[]).filter(d=>d.bin===sh.bin);
+  $("detDel").innerHTML=xl.length?xl.map(d=>'<div class="row del"><span style="flex:1"><b class="num">'+fmt(d.no)+"</b> "+
+    '<span class="tag tag'+d.size+'">'+d.size+'cm</span><br><span style="font-size:12px;color:#4A5B6B">'+d.kind+" "+hms(d.delTs)+
+    "　読取 "+hms(d.ts)+"</span></span></div>").join(""):'<p class="note">なし</p>';
+  closeSheets(); openSheet("shDetail");
+}
+$("detBack").onclick=()=>{ closeSheets(); openSheet("shAdmin"); };
+
+$("btnExpNew").onclick=()=>{
+  const day=dayByDate(admDate); if(!day) return;
+  const list=day.shifts.filter(sh=>sh.closed&&!sh.exportedAt);
+  if(!list.length){ notify("未書き出しの便はありません",""); return; }
+  download("jet_"+day.date+"_new.csv",CSVHEAD+csvBody(day,list,false));
+  markExported(day,list);
+};
+$("btnExpDay").onclick=()=>{
+  const day=dayByDate(admDate); if(!day||!day.shifts.length) return;
+  download("jet_"+day.date+".csv",CSVHEAD+csvBody(day,day.shifts,true));
+  markExported(day,day.shifts);
+};
+$("btnExpAll").onclick=()=>{
+  admArchive=readArchive();
+  let out=CSVHEAD;
+  admArchive.concat([S]).forEach(d=>{ out+=csvBody(d,d.shifts,true); d.shifts.forEach(sh=>sh.exportedAt=Date.now()); });
+  writeArchive(admArchive); save();
+  download("jet_all.csv",out); renderAdmin();
+};
 
 /* ---------- 画面を消さない ---------- */
 async function wake(){ try{ if("wakeLock" in navigator) await navigator.wakeLock.request("screen"); }catch(e){} }
