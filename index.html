@@ -187,6 +187,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <div class="prev" id="startPrev"></div>
   </div>
   <button class="btn wide dim" id="btnSumFromStart">本日の集計を見る</button>
+  <button class="btn wide" id="btnFinish">業務終了</button>
   <button class="btn wide dim" id="btnAdmin">管理画面</button>
 </div>
 
@@ -320,6 +321,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <h3>便ごとの開始・締め</h3>
   <div id="times"></div>
 
+  <h3>業務終了の記録</h3>
+  <div id="endLog"></div>
+
   <h3>二度読みの記録</h3>
   <div id="dupLog"></div>
 
@@ -347,13 +351,13 @@ let S=load();
 let mode3=true, sheetOpen=false, locked=false;
 let selMode=false, sel=new Set();
 
-function blank(){ return {date:today(),shifts:[],active:-1,dupLog:[],delLog:[]}; }
+function blank(){ return {date:today(),shifts:[],active:-1,dupLog:[],delLog:[],ends:[]}; }
 function load(){
   try{
     const raw=localStorage.getItem(KEY); if(!raw) return blank();
     const s=JSON.parse(raw);
     if(s.date!==today()){ archive(s); return blank(); }
-    s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; return s;
+    s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; s.ends=s.ends||[]; return s;
   }catch(e){ return blank(); }
 }
 function archive(s){ try{ const a=JSON.parse(localStorage.getItem(AKEY)||"[]"); a.push(s);
@@ -486,8 +490,27 @@ function prepStart(){
          "開始 <b>"+hhmm(last.startedAt)+"</b>　締め <b>"+hhmm(last.closedAt)+"</b>　計 <b>"+(a+b)+"</b>個";
     if(last.tel) html+='<br><a class="tel" href="tel:'+last.tel.replace(/[^0-9+]/g,"")+'">'+last.tel+" に発信</a>";
   }
+  if(S.ends.length){
+    html+=(html?"<br><br>":"")+"本日の業務終了：<b>"+S.ends.map(e=>e.driver+" "+hhmm(e.ts)).join("</b>　<b>")+"</b>";
+  }
   $("startPrev").innerHTML=html;
 }
+$("btnFinish").onclick=()=>{
+  const drv=$("sDrv").value.trim();
+  const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  if(!S.shifts.length){ notify("記録がありません","本日はまだ便が始まっていません。"); return; }
+  if(last&&!last.closed){ notify("締めていない便があります",last.bin+" がまだ締まっていません。先に便を締めてください。"); return; }
+  const name=drv||(last?last.driver:"");
+  const todo=S.shifts.filter(sh=>sh.closed&&!sh.exportedAt).length;
+  ask({title:"業務終了を記録します",
+    body:name+"　"+hhmm(Date.now())+(todo?"\n未書き出しの便が "+todo+"便 あります。あとから管理画面で書き出せます。":""),
+    okText:"終了する",
+    onOk:()=>{
+      S.ends.push({driver:name,tel:$("sTel").value.trim()||(last?last.tel:""),ts:Date.now()});
+      save(); beep(660,140,.06); prepStart();
+      notify("業務終了を記録しました",name+"　"+hhmm(S.ends[S.ends.length-1].ts)+"\n続けて稼働する場合は、そのまま次の便を始められます。");
+    }});
+};
 $("btnStart").onclick=()=>{
   const drv=$("sDrv").value.trim();
   if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
@@ -677,6 +700,11 @@ function openSummary(){
       "　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+tel+"</span></span></div>";
   }).join(""):'<p class="note">なし</p>';
 
+  $("endLog").innerHTML=S.ends.length?S.ends.map(e=>
+    '<div class="row"><span style="flex:1"><b>'+e.driver+"</b>"+(e.tel?' <span style="font-size:12px;color:#4A5B6B">'+e.tel+"</span>":"")+
+    '</span><span class="tm num" style="font-size:14px;font-weight:700">'+hhmm(e.ts)+"</span></div>").join("")
+    :'<p class="note">なし</p>';
+
   $("dupLog").innerHTML=S.dupLog.length?S.dupLog.map(d=>
     '<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1">'+
     '<b class="num">'+fmt(d.no)+"</b><br>"+
@@ -794,14 +822,17 @@ function renderAdmin(){
     (todo?'<div class="badge b-todo" style="margin-top:8px">未書き出し '+todo+"便</div>":'<div class="badge b-done" style="margin-top:8px">書き出し済み</div>')+
     "</div>";
 
-  $("admList").innerHTML=day.shifts.length?day.shifts.map((sh,i)=>{
+  const ends=day.ends||[];
+  $("admList").innerHTML=(day.shifts.length?day.shifts.map((sh,i)=>{
     const c=cnt(sh);
     const bad=sh.closed?(sh.exportedAt?'<span class="badge b-done">書き出し済 '+hhmm(sh.exportedAt)+"</span>":'<span class="badge b-todo">未書き出し</span>')
                        :'<span class="badge b-open">計数中</span>';
     return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+sh.bin+"　"+(sh.driver||"")+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+(sh.tel?"　"+sh.tel:"")+"</div>"+bad+
       '</div><div class="qty num">'+(c.a+c.b)+"</div></div>";
-  }).join(""):'<p class="note">便がありません</p>';
+  }).join(""):'<p class="note">便がありません</p>')+
+    (ends.length?'<div class="lhead" style="margin-top:10px">業務終了</div>'+ends.map(e=>
+      '<div class="row"><span style="flex:1"><b>'+e.driver+'</b></span><span class="tm num" style="font-size:14px;font-weight:700">'+hhmm(e.ts)+"</span></div>").join(""):"");
   $("admList").querySelectorAll("[data-i]").forEach(r=>r.onclick=()=>openDetail(day,parseInt(r.getAttribute("data-i"),10)));
 }
 
