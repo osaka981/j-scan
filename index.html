@@ -370,8 +370,31 @@ function load(){
     s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; s.ends=s.ends||[]; return s;
   }catch(e){ return blank(); }
 }
-function archive(s){ try{ const a=JSON.parse(localStorage.getItem(AKEY)||"[]"); a.push(s);
-  while(a.length>60)a.shift(); localStorage.setItem(AKEY,JSON.stringify(a)); }catch(e){} }
+function mergeDay(t,x){
+  t.shifts=(t.shifts||[]).concat(x.shifts||[]);
+  t.dupLog=(t.dupLog||[]).concat(x.dupLog||[]);
+  t.delLog=(t.delLog||[]).concat(x.delLog||[]);
+  t.ends=(t.ends||[]).concat(x.ends||[]);
+  return t;
+}
+function dedupeDays(a){
+  const byDate=new Map();
+  a.forEach(d=>{
+    if(!d||!d.date) return;
+    if(byDate.has(d.date)) mergeDay(byDate.get(d.date),d);
+    else byDate.set(d.date,d);
+  });
+  return Array.from(byDate.values()).sort((p,q)=>p.date<q.date?-1:1);
+}
+function archive(s){
+  try{
+    if(!s||!s.shifts||!s.shifts.length) return;
+    let a=JSON.parse(localStorage.getItem(AKEY)||"[]");
+    a.push(s); a=dedupeDays(a);
+    while(a.length>60)a.shift();
+    localStorage.setItem(AKEY,JSON.stringify(a));
+  }catch(e){}
+}
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
 const cur=()=>S.shifts[S.active];
 const inScan=()=>S.active>=0 && cur() && !cur().closed;
@@ -794,7 +817,14 @@ const PIN_STAFF="1108";   // 大阪急配（社内）
 const PIN_CLIENT="0981";  // ジェットグループ様
 let adminOK=false, isStaff=false, admArchive=[], admDate=null;
 
-function readArchive(){ try{ return JSON.parse(localStorage.getItem(AKEY)||"[]"); }catch(e){ return []; } }
+function readArchive(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(AKEY)||"[]");
+    const fixed=dedupeDays(raw);
+    if(fixed.length!==raw.length) localStorage.setItem(AKEY,JSON.stringify(fixed));
+    return fixed;
+  }catch(e){ return []; }
+}
 function writeArchive(a){ try{ localStorage.setItem(AKEY,JSON.stringify(a)); }catch(e){} }
 function allDays(){ return readArchive().concat([S]); }
 function dayByDate(d){ if(d===S.date) return S; return admArchive.find(x=>x.date===d)||null; }
@@ -823,7 +853,7 @@ $("btnAdmin").onclick=()=>{
 };
 function openAdmin(){
   admArchive=readArchive();
-  const days=admArchive.map(d=>d.date).filter(d=>d!==S.date).concat([S.date]).reverse();
+  const days=Array.from(new Set(admArchive.map(d=>d.date).filter(d=>d!==S.date))).concat([S.date]).reverse();
   admDate=admDate&&days.includes(admDate)?admDate:S.date;
   $("admDay").innerHTML=days.map(d=>'<option value="'+d+'"'+(d===admDate?" selected":"")+">"+d+(d===S.date?"（本日）":"")+"</option>").join("");
   renderAdmin(); openSheet("shAdmin");
@@ -892,13 +922,6 @@ $("btnSubNew").onclick=()=>{
 };
 $("btnSubToday").onclick=()=>exportSubmit(S,S.shifts);
 
-$("btnExpNew").onclick=()=>{
-  const day=dayByDate(admDate); if(!day) return;
-  const list=day.shifts.filter(sh=>sh.closed&&!sh.exportedAt);
-  if(!list.length){ notify("未書き出しの便はありません",""); return; }
-  download("jet_"+day.date+"_new.csv",CSVHEAD+csvBody(day,list,false));
-  markExported(day,list);
-};
 $("btnExpDay").onclick=()=>{
   if(!isStaff) return;
   const day=dayByDate(admDate); if(!day||!day.shifts.length) return;
