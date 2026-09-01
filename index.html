@@ -6,8 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="ジェット計数">
-<meta name="theme-color" content="#EEF1F5">
+<meta name="apple-mobile-web-app-title" content="バーコードSCAN">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <meta name="format-detection" content="telephone=no">
 <title>ジェット計数 — ゆうパケット</title>
 <style>
@@ -187,6 +190,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <div class="prev" id="startPrev"></div>
   </div>
   <button class="btn wide dim" id="btnSumFromStart">本日の集計を見る</button>
+  <button class="btn wide hide" id="btnResume">計数中の便に戻る</button>
   <button class="btn wide" id="btnFinish">業務終了</button>
   <button class="btn wide dim" id="btnAdmin">管理画面</button>
 </div>
@@ -293,6 +297,10 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <p class="note">列は 日付・便・ドライバー・サイズ・番号・読取時刻 のみです。便ごとに書き出す場合は、上の一覧から便を開いてください。</p>
 
   <div id="admInternal">
+    <h3>本日のデータ</h3>
+    <button class="btn wide danger" id="btnWipeToday">本日のデータを全消去する</button>
+    <p class="note">テストで作った便を片付けるためのものです。本日の便・読取・記録がすべて消えます。過去日は消えません。</p>
+
     <h3>社内用（記録の追跡まで含む）</h3>
     <button class="btn wide dim" id="btnExpDay">この日を全部書き出す</button>
     <button class="btn wide dim" id="btnExpAll">全期間を書き出す</button>
@@ -480,7 +488,11 @@ function showView(){
   if(scan) $("vScan").style.display="flex";
   if(!scan) prepStart();
 }
+function openShiftIdx(){ return S.shifts.findIndex(sh=>!sh.closed); }
 function prepStart(){
+  const oi=openShiftIdx();
+  $("btnResume").className="btn wide"+(oi<0?" hide":"");
+  if(oi>=0) $("btnResume").textContent=S.shifts[oi].bin+"（計数中）に戻る";
   const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
   $("sBin").value="第"+(S.shifts.length+1)+"便";
   $("sDrv").value=last?last.driver:"";
@@ -497,11 +509,16 @@ function prepStart(){
   }
   $("startPrev").innerHTML=html;
 }
+$("btnResume").onclick=()=>{
+  const oi=openShiftIdx(); if(oi<0) return;
+  S.active=oi; save(); showView(); render();
+};
 $("btnFinish").onclick=()=>{
   const drv=$("sDrv").value.trim();
   const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
   if(!S.shifts.length){ notify("記録がありません","本日はまだ便が始まっていません。"); return; }
-  if(last&&!last.closed){ notify("締めていない便があります",last.bin+" がまだ締まっていません。先に便を締めてください。"); return; }
+  const oi=openShiftIdx();
+  if(oi>=0){ notify("締めていない便があります",S.shifts[oi].bin+" がまだ締まっていません。\n上の「"+S.shifts[oi].bin+"（計数中）に戻る」から締めてください。"); return; }
   const name=drv||(last?last.driver:"");
   const todo=S.shifts.filter(sh=>sh.closed&&!sh.exportedAt).length;
   ask({title:"業務終了を記録します",
@@ -887,6 +904,14 @@ $("btnExpDay").onclick=()=>{
   const day=dayByDate(admDate); if(!day||!day.shifts.length) return;
   download("jet_"+day.date+".csv",CSVHEAD+csvBody(day,day.shifts,true));
   markExported(day,day.shifts);
+};
+$("btnWipeToday").onclick=()=>{
+  if(!isStaff) return;
+  const n=S.shifts.length;
+  if(!n){ notify("消すデータがありません",""); return; }
+  ask({title:"本日のデータを全消去します",body:"便 "+n+"件と、その読取・記録がすべて消えます。\n元に戻せません。",okText:"消去する",danger:true,
+    onOk:()=>{ ask({title:"本当に消去しますか",body:"",okText:"消去を実行する",danger:true,
+      onOk:()=>{ S=blank(); save(); closeSheets(); showView(); notify("本日のデータを消去しました",""); }}); }});
 };
 $("btnExpAll").onclick=()=>{
   if(!isStaff) return;
