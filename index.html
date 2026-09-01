@@ -152,10 +152,14 @@ footer .btn{flex:1}
 .tabs button.on3{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
 .tabs button.on5{border-color:var(--amber);background:var(--amber-bg);color:var(--amber)}
 .tabs button.onall{border-color:var(--ink);background:#E6EBF1;color:var(--ink)}
-.search{width:100%;padding:11px 12px;font-size:17px;font-family:inherit;color:var(--ink);border:1px solid var(--line);border-radius:8px;background:var(--card);margin-bottom:8px}
+.search{width:100%;padding:11px 12px;font-size:17px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF;margin-bottom:0}
+.search:focus{outline:2px solid var(--blue);outline-offset:0}
+.search::placeholder{color:#8A98A6}
+.sep{height:0;border-top:2px solid #B9C7D6;margin:12px 0 10px}
 .sheet h2{font-size:17px;margin:0 0 10px}
 .sheet h3{font-size:13px;color:var(--ink-2);margin:16px 0 6px}
 .alertbox{background:var(--red-bg);border:1px solid #E0A9A3;border-radius:10px;padding:12px;margin-bottom:10px}
+.metabox{background:#FFF;border:1.5px solid #7F94AA;border-radius:10px;padding:12px;margin-bottom:10px}
 .alertbox .an{font-size:22px;font-weight:800;color:var(--red);letter-spacing:.04em}
 .alertbox .ar{font-size:14px;margin-top:8px}
 .alertbox .ar b{font-size:17px}
@@ -264,6 +268,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <span class="selinfo" id="selInfo"></span>
     </div>
     <input class="search" id="hisSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
+    <div class="sep"></div>
     <div id="list"></div>
     <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
   </div>
@@ -368,11 +373,12 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   </div>
   <h3>読取</h3>
   <div class="tabs" id="detTabs">
-    <button data-size="all" class="onall">全部</button>
-    <button data-size="3">3cm</button>
-    <button data-size="5">5cm</button>
+    <button data-size="3" class="on3">3cm を先に</button>
+    <button data-size="5">5cm を先に</button>
   </div>
+  <p class="note" id="detOrderNote" style="margin:-2px 2px 8px">もう一度押すと時刻の並びが逆になります</p>
   <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
+  <div class="sep"></div>
   <div id="detScans"></div>
   <div id="detInternal">
     <div id="detDelWrap">
@@ -1235,7 +1241,7 @@ function renderAdmin(){
   if(!day){ $("admSummary").innerHTML='<p class="note">この日のデータがありません</p>'; $("admList").innerHTML=""; return; }
   let t3=0,t5=0,todo=0;
   day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; if(sh.closed&&!sh.exportedAt) todo++; });
-  $("admSummary").innerHTML='<div class="alertbox sumcard" id="sumCard" style="background:#FFF;border-color:#B9C7D6">'+
+  $("admSummary").innerHTML='<div class="metabox sumcard" id="sumCard">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;color:#4A5B6B;font-weight:600">'+admDate+' の合計</div>'+
     '<div style="font-size:12px;color:var(--blue);font-weight:700">タップで全便の番号一覧 ›</div></div>'+
     '<div style="font-size:30px;font-weight:800;margin-top:2px">'+(t3+t5)+'<span style="font-size:15px;font-weight:600"> 個</span></div>'+
@@ -1263,7 +1269,7 @@ function renderAdmin(){
 }
 
 let detCur=null;
-let detSize="all";
+let detSize="3", detAsc=false;
 function detAllScans(){
   if(!detCur) return [];
   if(detCur.all) return detCur.day.shifts.flatMap(sh=>sh.scans.map(x=>Object.assign({},x,{_bin:sh.bin,_drv:sh.driver||""})));
@@ -1272,21 +1278,29 @@ function detAllScans(){
 function paintDetScans(){
   if(!detCur) return;
   const all=detAllScans(), q=digitsOf($("detSearch").value);
-  let src=detSize==="all"?all:all.filter(x=>String(x.size)===detSize);
-  if(q) src=src.filter(x=>x.no.includes(q));
+  const src=q?all.filter(x=>x.no.includes(q)):all;
+  const first=Number(detSize), second=first===3?5:3;
   $("detTabs").querySelectorAll("button").forEach(b=>{
-    const v=b.getAttribute("data-size"); b.className=v===detSize?(v==="all"?"onall":"on"+v):"";
+    const v=b.getAttribute("data-size");
+    b.className=v===detSize?"on"+v:"";
+    b.textContent=v+"cm を先に"+(v===detSize?(detAsc?"（古い順）":"（新しい順）"):"");
   });
-  const sorted=src.slice().sort((a,b)=>(a.ts||0)-(b.ts||0)).reverse();
+  const byTime=(a,b)=>detAsc?((a.ts||0)-(b.ts||0)):((b.ts||0)-(a.ts||0));
+  const g1=src.filter(x=>x.size===first).sort(byTime), g2=src.filter(x=>x.size===second).sort(byTime);
+  const rowHtml=x=>'<div class="row"><span class="no num">'+fmt(x.no)+
+    (detCur.all?'<div style="font-size:11px;color:#4A5B6B;font-weight:500">'+x._bin+"　"+x._drv+"</div>":"")+'</span>'+
+    '<span class="tag tag'+x.size+'">'+x.size+'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>";
+  const group=(sz,list)=>list.length?'<div class="lhead" style="margin-top:8px"><span>'+sz+'cm</span><span>'+list.length+'件</span></div>'+list.map(rowHtml).join(""):"";
   $("detScans").innerHTML=all.length
-    ?(sorted.length?sorted.map(x=>
-      '<div class="row"><span class="no num">'+fmt(x.no)+(detCur.all?'<div style="font-size:11px;color:#4A5B6B;font-weight:500">'+x._bin+"　"+x._drv+"</div>":"")+'</span>'+
-      '<span class="tag tag'+x.size+'">'+x.size+'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>").join("")+
-      '<p class="note">'+sorted.length+"件"+(detSize!=="all"||q?" 該当 / 全 "+all.length+"件":"")+"</p>"
+    ?(src.length?group(first,g1)+group(second,g2)+'<p class="note">'+src.length+"件"+(q?" 該当 / 全 "+all.length+"件":"")+"</p>"
       :'<p class="note">該当する番号はありません</p>')
     :'<p class="note">なし</p>';
 }
-$("detTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{ detSize=b.getAttribute("data-size"); paintDetScans(); });
+$("detTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
+  const v=b.getAttribute("data-size");
+  if(v===detSize) detAsc=!detAsc; else { detSize=v; detAsc=false; }
+  paintDetScans();
+});
 $("detSearch").addEventListener("input",paintDetScans);
 $("detSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("detSearch").blur(); } });
 function shrinkImage(file,longEdge,quality){
@@ -1359,12 +1373,12 @@ $("phFile").onchange=async e=>{
   $("phTake").disabled=false; $("phTake").textContent="撮影して提出する";
 };
 function openDayDetail(day){
-  detCur={day:day,sh:null,all:true}; detSize="all";
+  detCur={day:day,sh:null,all:true}; detSize="3"; detAsc=false;
   $("detInternal").className=isStaff?"":"hide";
   $("detDelWrap").className="hide";
   let t3=0,t5=0; day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; });
   $("detTitle").textContent=day.date+"　全便";
-  $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
+  $("detMeta").innerHTML='<div class="metabox">'+
     '<div style="font-size:20px;font-weight:800">3cm '+t3+"　5cm "+t5+"　計 "+(t3+t5)+"</div>"+
     '<div style="font-size:14px;margin-top:4px">便数 '+day.shifts.length+"</div>"+
     day.shifts.map(sh=>{ const c=cnt(sh); return '<div style="font-size:13px;color:#4A5B6B;margin-top:2px">'+sh.bin+"　"+(sh.driver||"")+"　"+(c.a+c.b)+"個</div>"; }).join("")+
@@ -1380,11 +1394,11 @@ function openDayDetail(day){
 }
 function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
-  detCur={day:day,sh:sh}; detSize="all";
+  detCur={day:day,sh:sh}; detSize="3"; detAsc=false;
   $("detInternal").className=isStaff?"":"hide";
   $("detDelWrap").className="";
   $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
-  $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
+  $("detMeta").innerHTML='<div class="metabox">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
     '<div style="font-size:20px;font-weight:800;margin-top:4px">3cm '+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"</div>"+
     (isStaff?'<div style="margin-top:6px;font-size:14px;font-weight:700">'+corpName(sh.corp)+(sh.driverId?'<span style="font-weight:500;color:#4A5B6B">　ID '+sh.driverId+"</span>":"")+"</div>":"")+
