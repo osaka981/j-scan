@@ -359,7 +359,6 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <p class="note">二度読みの検知や電話番号まで含みます。先方に渡すものではありません。</p>
   </div>
   <button class="btn wide dim" id="btnAdmLogout">管理画面からログアウト</button>
-  <button class="btn wide dim" data-close>閉じる</button>
   <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
 </div>
 
@@ -368,15 +367,10 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <h2 id="detTitle">便の明細</h2>
   <div id="detMeta"></div>
   <div class="actbar">
-    <button class="btn primary" id="detSub">CSV書き出し</button>
     <button class="btn dim" id="detBack">一覧に戻る</button>
+    <button class="btn primary" id="detSub">CSV書き出し</button>
   </div>
   <h3>読取</h3>
-  <div class="tabs" id="detTabs">
-    <button data-size="3" class="on3">3cm を先に</button>
-    <button data-size="5">5cm を先に</button>
-  </div>
-  <p class="note" id="detOrderNote" style="margin:-2px 2px 8px">もう一度押すと時刻の並びが逆になります</p>
   <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
   <div class="sep"></div>
   <div id="detScans"></div>
@@ -1269,7 +1263,7 @@ function renderAdmin(){
 }
 
 let detCur=null;
-let detSize="3", detAsc=false;
+
 function detAllScans(){
   if(!detCur) return [];
   if(detCur.all) return detCur.day.shifts.flatMap(sh=>sh.scans.map(x=>Object.assign({},x,{_bin:sh.bin,_drv:sh.driver||""})));
@@ -1278,29 +1272,15 @@ function detAllScans(){
 function paintDetScans(){
   if(!detCur) return;
   const all=detAllScans(), q=digitsOf($("detSearch").value);
-  const src=q?all.filter(x=>x.no.includes(q)):all;
-  const first=Number(detSize), second=first===3?5:3;
-  $("detTabs").querySelectorAll("button").forEach(b=>{
-    const v=b.getAttribute("data-size");
-    b.className=v===detSize?"on"+v:"";
-    b.textContent=v+"cm を先に"+(v===detSize?(detAsc?"（古い順）":"（新しい順）"):"");
-  });
-  const byTime=(a,b)=>detAsc?((a.ts||0)-(b.ts||0)):((b.ts||0)-(a.ts||0));
-  const g1=src.filter(x=>x.size===first).sort(byTime), g2=src.filter(x=>x.size===second).sort(byTime);
+  const src=(q?all.filter(x=>x.no.includes(q)):all).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
   const rowHtml=x=>'<div class="row"><span class="no num">'+fmt(x.no)+
     (detCur.all?'<div style="font-size:11px;color:#4A5B6B;font-weight:500">'+x._bin+"　"+x._drv+"</div>":"")+'</span>'+
     '<span class="tag tag'+x.size+'">'+x.size+'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>";
-  const group=(sz,list)=>list.length?'<div class="lhead" style="margin-top:8px"><span>'+sz+'cm</span><span>'+list.length+'件</span></div>'+list.map(rowHtml).join(""):"";
   $("detScans").innerHTML=all.length
-    ?(src.length?group(first,g1)+group(second,g2)+'<p class="note">'+src.length+"件"+(q?" 該当 / 全 "+all.length+"件":"")+"</p>"
+    ?(src.length?src.map(rowHtml).join("")+'<p class="note">'+src.length+"件"+(q?" 該当 / 全 "+all.length+"件":"")+"</p>"
       :'<p class="note">該当する番号はありません</p>')
     :'<p class="note">なし</p>';
 }
-$("detTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{
-  const v=b.getAttribute("data-size");
-  if(v===detSize) detAsc=!detAsc; else { detSize=v; detAsc=false; }
-  paintDetScans();
-});
 $("detSearch").addEventListener("input",paintDetScans);
 $("detSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("detSearch").blur(); } });
 function shrinkImage(file,longEdge,quality){
@@ -1373,7 +1353,7 @@ $("phFile").onchange=async e=>{
   $("phTake").disabled=false; $("phTake").textContent="撮影して提出する";
 };
 function openDayDetail(day){
-  detCur={day:day,sh:null,all:true}; detSize="3"; detAsc=false;
+  detCur={day:day,sh:null,all:true};
   $("detInternal").className=isStaff?"":"hide";
   $("detDelWrap").className="hide";
   let t3=0,t5=0; day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; });
@@ -1394,7 +1374,7 @@ function openDayDetail(day){
 }
 function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
-  detCur={day:day,sh:sh}; detSize="3"; detAsc=false;
+  detCur={day:day,sh:sh};
   $("detInternal").className=isStaff?"":"hide";
   $("detDelWrap").className="";
   $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
