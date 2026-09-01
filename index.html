@@ -228,6 +228,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <button class="btn wide hide" id="btnResume">計数中の便に戻る</button>
   <button class="btn wide" id="btnFinish">業務終了</button>
   <button class="btn wide dim" id="btnAdmin">管理画面</button>
+  <p class="note" id="verNote" style="text-align:center;margin-top:10px"></p>
 </div>
 
 <!-- ============ 計数画面 ============ -->
@@ -606,6 +607,7 @@ const DEVKEY="jet-device-id";
 let DEVICE=localStorage.getItem(DEVKEY);
 if(!DEVICE){ DEVICE="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); localStorage.setItem(DEVKEY,DEVICE); }
 const shiftKey=sh=>DEVICE+"_"+sh.id;
+const keyOf=sh=>sh._key||shiftKey(sh);
 // 同じドライバー（IDが同じ。IDが無ければ氏名）の便を数える
 function sameDriver(sh,id,name){
   const a=normId(id), n=(name||"").trim();
@@ -662,6 +664,24 @@ window.addEventListener("online",()=>scheduleSync(300));
 window.addEventListener("offline",paintSync);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") scheduleSync(300); });
 setInterval(()=>{ scheduleSync(0); },60000);
+
+/* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
+const APP_VER="2026-09-01.24";
+$("verNote").textContent="版 "+APP_VER;
+async function checkUpdate(){
+  if(inScan()) return;
+  try{
+    const r=await fetch(location.pathname+"?chk="+Date.now(),{cache:"no-store"});
+    const t=await r.text(); const m=t.match(/APP_VER="([^"]+)"/);
+    if(!m||m[1]===APP_VER) return;
+    if(sessionStorage.getItem("jet-upd-try")===m[1]) { $("verNote").textContent="版 "+APP_VER+"（新しい版 "+m[1]+" があります。ブラウザで開き直してください）"; return; }
+    sessionStorage.setItem("jet-upd-try",m[1]);
+    $("verNote").textContent="新しい版に更新しています";
+    setTimeout(()=>location.replace(location.pathname+"?u="+Date.now()),400);
+  }catch(e){}
+}
+setTimeout(checkUpdate,1500);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") setTimeout(checkUpdate,800); });
 
 /* ---------- 先頭へ / 末尾へ ---------- */
 document.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>{
@@ -1013,7 +1033,7 @@ $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締め
 /* ---------- 集計 ---------- */
 let sumWho=null;   // null=全員 / それ以外は driverId または氏名
 async function fbDeleteShift(day,sh){
-  try{ await fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+shiftKey(sh)+".json",{method:"DELETE"}); }catch(e){}
+  try{ await fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
 }
 $("btnCancelShift").onclick=()=>{
   if(!inScan()) return;
@@ -1175,6 +1195,42 @@ const PIN_STAFF="1108";   // 大阪急配（社内）
 const PIN_CLIENT="0981";  // お客様（閲覧・提出用CSVのみ）
 let adminOK=false, isStaff=false, admArchive=[], admDate=null;
 
+let admRemoteDates=[], admCurDay=null;
+async function fetchRemoteDates(){
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
+    const v=await r.json();
+    admRemoteDates=v?Object.keys(v).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)):[];
+  }catch(e){}
+}
+async function fetchDayMerged(date){
+  const map=new Map();
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_scan/"+date+".json"); const v=await r.json();
+    if(v&&typeof v==="object") Object.values(v).forEach(j=>{
+      if(!j||!j.key) return;
+      map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
+        scans:(j.scans||[]).map(x=>({no:x.no,size:x.size,ts:x.ts})),
+        startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,
+        exportedAt:j.exportedAt||null,registered:j.registered!==false,_remote:true,_key:j.key});
+    });
+  }catch(e){}
+  const local=(date===S.date)?S:admArchive.find(x=>x.date===date);
+  if(local)(local.shifts||[]).forEach(sh=>map.set(shiftKey(sh),sh));
+  return {date:date,shifts:Array.from(map.values()).sort((a,b)=>(a.startedAt||0)-(b.startedAt||0)),
+          ends:(local&&local.ends)||[],dupLog:(local&&local.dupLog)||[],delLog:(local&&local.delLog)||[],
+          _local:local||null};
+}
+function buildLocalDay(date){
+  const local=(date===S.date)?S:admArchive.find(x=>x.date===date);
+  return {date:date,shifts:local?local.shifts.slice():[],ends:(local&&local.ends)||[],
+          dupLog:(local&&local.dupLog)||[],delLog:(local&&local.delLog)||[],_local:local||null};
+}
+function updateDateNote(){
+  const set=new Set(admArchive.map(d=>d.date)); set.add(S.date);
+  admRemoteDates.forEach(d=>set.add(d));
+  $("admDateNote").textContent="記録のある日："+Array.from(set).sort().reverse().join("、");
+}
 function readArchive(){
   try{
     const raw=JSON.parse(localStorage.getItem(AKEY)||"[]");
@@ -1189,8 +1245,15 @@ function dayByDate(d){ if(d===S.date) return S; return admArchive.find(x=>x.date
 function persistDay(day){ if(day===S){ save(); } else { writeArchive(admArchive); } }
 function markExported(day,shifts){
   const now=Date.now();
-  shifts.forEach(sh=>{ if(sh._remote) return; sh.exportedAt=now; if(day===S) sh._dirty=now; });
-  persistDay(day); if(day===S){ save(); scheduleSync(500); }
+  shifts.forEach(sh=>{
+    sh.exportedAt=now;
+    if(sh._remote){
+      fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+sh._key+".json",
+        {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({exportedAt:now})}).catch(()=>{});
+    }else if(day.date===S.date){ sh._dirty=now; }
+  });
+  if(day._local&&day._local!==S) writeArchive(admArchive);
+  if(day.date===S.date){ save(); scheduleSync(500); }
   if($("shAdmin").classList.contains("on")) renderAdmin();
 }
 const cnt=sh=>({a:sh.scans.filter(x=>x.size===3).length,b:sh.scans.filter(x=>x.size===5).length});
@@ -1211,11 +1274,13 @@ $("btnAdmin").onclick=()=>{
 };
 function openAdmin(){
   $("setPostName").value=SET.postName||""; $("setPostTel").value=SET.postTel||"";
+  loadSettings(true).then(()=>{ if(!$("setPostName").value)$("setPostName").value=SET.postName||""; if(!$("setPostTel").value)$("setPostTel").value=SET.postTel||""; paintCall(); });
+  fetchRemoteDates().then(updateDateNote);
   admArchive=readArchive();
   const days=Array.from(new Set(admArchive.map(d=>d.date).filter(d=>d!==S.date))).concat([S.date]).reverse();
   admDate=admDate&&days.includes(admDate)?admDate:S.date;
   $("admDate").value=admDate;
-  $("admDateNote").textContent="記録のある日："+days.slice().reverse().join("、");
+  updateDateNote();
   renderAdmin(); openSheet("shAdmin");
 }
 $("admDate").onchange=()=>{ admDate=$("admDate").value||S.date; renderAdmin(); };
@@ -1243,9 +1308,17 @@ function corpBreakdown(day){
       '<div style="font-size:14px">'+k+"　"+v.n+"便　"+v.q+"個</div>").join("");
 }
 function renderAdmin(){
+  paintAdminDay(buildLocalDay(admDate),false);
+  const want=admDate;
+  fetchDayMerged(want).then(day=>{ if(want===admDate) paintAdminDay(day,true); });
+}
+function paintAdminDay(day,remoteLoaded){
+  admCurDay=day;
   $("admInternal").className=isStaff?"":"hide";
-  const day=dayByDate(admDate);
-  if(!day){ $("admSummary").innerHTML='<p class="note">この日のデータがありません</p>'; $("admList").innerHTML=""; return; }
+  if(!day.shifts.length){
+    $("admSummary").innerHTML='<p class="note">'+(remoteLoaded?"この日のデータがありません":"読み込み中")+'</p>';
+    $("admList").innerHTML=""; return;
+  }
   let t3=0,t5=0,todo=0;
   day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; if(sh.closed&&!sh.exportedAt) todo++; });
   $("admSummary").innerHTML='<div class="metabox sumcard" id="sumCard">'+
@@ -1317,7 +1390,7 @@ function shrinkImage(file,longEdge,quality){
   });
 }
 let phSh=null, phPhotos={};
-function photoPathFor(day,sh){ return FB_URL+"/nikki/jet_photos/"+day.date+"/"+shiftKey(sh); }
+function photoPathFor(day,sh){ return FB_URL+"/nikki/jet_photos/"+day.date+"/"+keyOf(sh); }
 function openPhotoSheet(){
   if(!S.shifts.length){ notify("便がありません","便を始めて締めてから提出してください。"); return; }
   // 対象は今日の便。開始画面に入っている人の便を優先し、直近の締め済み便を初期選択
@@ -1390,7 +1463,7 @@ function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
   detCur={day:day,sh:sh};
   $("detInternal").className=isStaff?"":"hide";
-  $("detDelWrap").className="";
+  $("detDelWrap").className=(isStaff&&!sh._remote)?"":"hide";
   $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
   $("detMeta").innerHTML='<div class="metabox">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
@@ -1438,7 +1511,7 @@ $("detSub").onclick=()=>{
     body:"番号 "+rows+"件\nファイル名 "+submitName(detCur.day,list.filter(sh=>sh.scans.length)),okText:"書き出す",
     onOk:()=>exportSubmit(detCur.day,list)});
 };
-$("btnSubDay").onclick=()=>{ const day=dayByDate(admDate); if(day) exportSubmit(day,day.shifts); };
+$("btnSubDay").onclick=()=>{ if(admCurDay) exportSubmit(admCurDay,admCurDay.shifts); };
 // 便ごとのCSVを1つのZIPにまとめる（無圧縮・外部ライブラリ不要）
 const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
 function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
@@ -1461,7 +1534,7 @@ function makeZip(files){   // files: [{name, text}]
   return new Blob([...parts,...central,end],{type:"application/zip"});
 }
 $("btnSubZip").onclick=()=>{
-  const day=dayByDate(admDate); if(!day) return;
+  const day=admCurDay; if(!day) return;
   const list=day.shifts.filter(sh=>sh.scans.length);
   if(!list.length){ notify("書き出す便がありません",""); return; }
   const files=list.map(sh=>({name:submitName(day,[sh]),text:csvSubmit(day,[sh])}));
@@ -1472,7 +1545,7 @@ $("btnSubZip").onclick=()=>{
   notify("ZIPに"+files.length+"ファイルをまとめました","便ごとのCSVが1ファイルずつ入っています。");
 };
 $("btnSubNew").onclick=()=>{
-  const day=dayByDate(admDate); if(!day) return;
+  const day=admCurDay; if(!day) return;
   const list=day.shifts.filter(sh=>sh.closed&&!sh.exportedAt);
   if(!list.length){ notify("未書き出しの便はありません",""); return; }
   exportSubmit(day,list);
@@ -1481,7 +1554,7 @@ $("btnSubToday").onclick=()=>exportSubmit(S,sumWho==="__all"||sumWho===null?dayA
 
 $("btnExpDay").onclick=()=>{
   if(!isStaff) return;
-  const day=dayByDate(admDate); if(!day||!day.shifts.length) return;
+  const day=admCurDay; if(!day||!day.shifts.length) return;
   download("jet_"+day.date+".csv",CSVHEAD+csvBody(day,day.shifts,true));
   markExported(day,day.shifts);
 };
@@ -1517,6 +1590,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 window.addEventListener("beforeunload",save);
 
 showView(); render(); scheduleSync(1500);
+try{ if(location.search&&history.replaceState) history.replaceState(null,"",location.pathname); }catch(e){}
 </script>
 </body>
 </html>
