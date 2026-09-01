@@ -134,6 +134,19 @@ footer .btn{flex:1}
 .admrow .hint{font-size:11px;color:var(--blue);font-weight:600;margin-top:2px}
 .sumcard{cursor:pointer}
 .sumcard:active{background:var(--blue-bg) !important}
+.sheet,.listwrap{scrollbar-width:auto;scrollbar-color:#8FA3B8 #E6EBF1}
+.sheet::-webkit-scrollbar,.listwrap::-webkit-scrollbar{width:14px}
+.sheet::-webkit-scrollbar-track,.listwrap::-webkit-scrollbar-track{background:#E6EBF1}
+.sheet::-webkit-scrollbar-thumb,.listwrap::-webkit-scrollbar-thumb{background:#8FA3B8;border-radius:7px;border:3px solid #E6EBF1}
+.sheet::-webkit-scrollbar-thumb:hover,.listwrap::-webkit-scrollbar-thumb:hover{background:#5E7A96}
+.jump{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;padding:8px 0 4px;pointer-events:none;z-index:5}
+.jump button{pointer-events:auto;border:1px solid #B9C7D6;background:var(--card);color:var(--blue);font-weight:700;font-size:14px;
+  border-radius:20px;padding:10px 14px;font-family:inherit;cursor:pointer;box-shadow:0 2px 8px rgba(18,33,46,.15)}
+.jump button:active{background:var(--blue-bg)}
+.actbar{display:flex;gap:8px;margin:0 0 10px}
+.actbar .btn{flex:1;padding:12px 10px;font-size:15px}
+.btn.primary{background:var(--blue-bg);border-color:#8FB4D8;color:var(--blue)}
+.search{width:100%;padding:11px 12px;font-size:17px;font-family:inherit;color:var(--ink);border:1px solid var(--line);border-radius:8px;background:var(--card);margin-bottom:8px}
 .sheet h2{font-size:17px;margin:0 0 10px}
 .sheet h3{font-size:13px;color:var(--ink-2);margin:16px 0 6px}
 .alertbox{background:var(--red-bg);border:1px solid #E0A9A3;border-radius:10px;padding:12px;margin-bottom:10px}
@@ -244,7 +257,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <button class="btn sm dim" id="btnDelAll">全件削除</button>
       <span class="selinfo" id="selInfo"></span>
     </div>
+    <input class="search" id="hisSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
     <div id="list"></div>
+    <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
   </div>
 
   <footer>
@@ -334,22 +349,31 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   </div>
   <button class="btn wide dim" id="btnAdmLogout">管理画面からログアウト</button>
   <button class="btn wide dim" data-close>閉じる</button>
+  <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
 </div>
 
 <!-- 便の明細 -->
 <div class="sheet full" id="shDetail">
   <h2 id="detTitle">便の明細</h2>
+  <div class="actbar">
+    <button class="btn dim" id="detBack">一覧に戻る</button>
+    <button class="btn primary" id="detSub">提出用CSVを書き出す</button>
+  </div>
   <div id="detMeta"></div>
   <h3>読取</h3>
+  <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
   <div id="detScans"></div>
   <div id="detInternal">
+    <h3>この便の削除</h3>
+    <button class="btn wide danger" id="detDelete">この便を削除する</button>
+    <p class="note">便と読取がすべて消え、計上からも外れます。削除の記録には残ります。</p>
+
     <h3>二度読みの記録</h3>
     <div id="detDup"></div>
     <h3>削除の記録</h3>
     <div id="detDel"></div>
   </div>
-  <button class="btn wide" id="detSub">この便の提出用CSVを書き出す</button>
-  <button class="btn wide dim" id="detBack">一覧に戻る</button>
+  <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
 </div>
 
 <!-- 回収資料の写真提出 -->
@@ -389,6 +413,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <p class="note hide" id="cancelNote">IDやドライバーを間違えて始めたときに使います。読取があれば削除の記録に残ります。</p>
   <button class="btn wide" id="btnNewShift">次の便を始める</button>
   <button class="btn wide dim" data-close>閉じる</button>
+  <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
 </div>
 
 <script>
@@ -627,6 +652,13 @@ window.addEventListener("offline",paintSync);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") scheduleSync(300); });
 setInterval(()=>{ scheduleSync(0); },60000);
 
+/* ---------- 先頭へ / 末尾へ ---------- */
+document.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>{
+  const box=b.closest(".sheet,.listwrap"); if(!box) return;
+  box.scrollTo({top:b.getAttribute("data-jump")==="top"?0:box.scrollHeight,behavior:"smooth"});
+});
+const digitsOf=v=>String(v||"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[^0-9]/g,"");
+
 /* ---------- 確認ダイアログ ---------- */
 let askOpen=false, askOnOk=null;
 function ask(o){
@@ -795,9 +827,12 @@ function render(){
   $("selInfo").textContent=selMode?"行をタップで選択":"";
 
   const l=$("list");
+  const q=digitsOf($("hisSearch").value);
+  const src=q?sh.scans.filter(x=>x.no.includes(q)):sh.scans.slice(-60);
   if(!sh.scans.length){ l.innerHTML='<div class="empty">まだ読み取りがありません</div>'; }
+  else if(q&&!src.length){ l.innerHTML='<div class="empty">「'+q+'」を含む番号はありません</div>'; }
   else{
-    l.innerHTML=sh.scans.slice(-60).reverse().map(x=>
+    l.innerHTML=src.slice().reverse().map(x=>
       '<div class="row'+(selMode&&sel.has(x.no)?" pick":"")+'" data-no="'+x.no+'">'+
       (selMode?'<span class="ck">'+(sel.has(x.no)?"✓":"")+'</span>':'')+
       '<span class="no num">'+fmt(x.no)+'</span>'+
@@ -904,6 +939,7 @@ let buf="", bufT=0;
 document.addEventListener("keydown",e=>{
   if(locked){ notifyLocked(); return; }
   if(sheetOpen||askOpen||!inScan()) return;
+  if(document.activeElement&&document.activeElement.tagName==="INPUT") return;
   const now=Date.now();
   if(now-bufT>400) buf="";
   bufT=now;
@@ -927,6 +963,8 @@ function setMode(v){
 $("m3").onclick=()=>setMode(true);
 $("m5").onclick=()=>setMode(false);
 
+$("hisSearch").addEventListener("input",()=>render());
+$("hisSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("hisSearch").blur(); } });
 $("btnManual").onclick=()=>{ $("inNo").value=""; openSheet("shManual"); setTimeout(()=>$("inNo").focus(),80); };
 $("btnMan3").onclick=()=>{ const v=$("inNo").value; mode3=true; closeSheets(); handle(v); };
 $("btnMan5").onclick=()=>{ const v=$("inNo").value; mode3=false; closeSheets(); handle(v); };
@@ -1211,6 +1249,20 @@ function renderAdmin(){
 }
 
 let detCur=null;
+function paintDetScans(){
+  if(!detCur) return;
+  const sh=detCur.sh, q=digitsOf($("detSearch").value);
+  const src=q?sh.scans.filter(x=>x.no.includes(q)):sh.scans;
+  $("detScans").innerHTML=sh.scans.length
+    ?(src.length?src.slice().reverse().map(x=>
+      '<div class="row"><span class="no num">'+fmt(x.no)+'</span><span class="tag tag'+x.size+'">'+x.size+
+      'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>").join("")+
+      '<p class="note">'+(q?src.length+"件 該当 / ":"")+sh.scans.length+"件</p>"
+      :'<p class="note">「'+q+'」を含む番号はありません</p>')
+    :'<p class="note">なし</p>';
+}
+$("detSearch").addEventListener("input",paintDetScans);
+$("detSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("detSearch").blur(); } });
 function shrinkImage(file,longEdge,quality){
   return new Promise((resolve,reject)=>{
     const fr=new FileReader();
@@ -1292,9 +1344,7 @@ function openDetail(day,i){
     ((isStaff&&sh.tel)?'<div style="margin-top:6px"><a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">'+sh.tel+" に発信</a></div>":"")+
     (sh.exportedAt?'<div class="badge b-done" style="margin-top:8px">書き出し済 '+hhmm(sh.exportedAt)+"</div>":"")+
     "</div>";
-  $("detScans").innerHTML=sh.scans.length?sh.scans.slice().reverse().map(x=>
-    '<div class="row"><span class="no num">'+fmt(x.no)+'</span><span class="tag tag'+x.size+'">'+x.size+
-    'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>").join(""):'<p class="note">なし</p>';
+  $("detSearch").value=""; paintDetScans();
   const dl=(day.dupLog||[]).filter(d=>d.bin===sh.bin);
   $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
     fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">検知 '+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
@@ -1305,6 +1355,25 @@ function openDetail(day,i){
   closeSheets(); openSheet("shDetail");
 }
 $("detBack").onclick=()=>{ closeSheets(); openSheet("shAdmin"); };
+$("detDelete").onclick=()=>{
+  if(!isStaff||!detCur) return;
+  const day=detCur.day, sh=detCur.sh, n=sh.scans.length;
+  ask({title:sh.bin+"（"+sh.driver+"）を削除します",
+    body:day.date+"　読取 "+n+"件\nこの便は記録から消え、計上からも外れます。",
+    okText:"削除に進む",danger:true,
+    onOk:()=>{ ask({title:"本当に削除しますか",body:"元に戻せません。削除の記録にだけ残ります。",okText:"削除を実行する",danger:true,
+      onOk:()=>{
+        const now=Date.now();
+        day.delLog=day.delLog||[];
+        sh.scans.forEach(x=>day.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"便削除"}));
+        day.shifts=day.shifts.filter(x=>x!==sh);
+        if(day===S){ if(S.active>=0&&!S.shifts[S.active]) S.active=-1; save(); } else { writeArchive(admArchive); }
+        fbDeleteShift(day,sh);
+        closeSheets(); openAdmin();
+        notify("便を削除しました",sh.bin+"（"+sh.driver+"）を削除の記録に残しました。");
+        if(day===S) showView();
+      }}); }});
+};
 $("detSub").onclick=()=>{ if(detCur) exportSubmit(detCur.day,[detCur.sh]); };
 $("btnSubDay").onclick=()=>{ const day=dayByDate(admDate); if(day) exportSubmit(day,day.shifts); };
 // 便ごとのCSVを1つのZIPにまとめる（無圧縮・外部ライブラリ不要）
