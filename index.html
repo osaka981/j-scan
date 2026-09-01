@@ -637,10 +637,14 @@ function prepStart(){
   $("btnResume").className="btn wide"+(oi<0?" hide":"");
   if(oi>=0) $("btnResume").textContent=S.shifts[oi].bin+"（計数中）に戻る";
   const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  const lastEnd=S.ends.length?S.ends[S.ends.length-1].ts:0;
+  const carry=last&&!(lastEnd&&lastEnd>(last.closedAt||last.startedAt||0));   // 業務終了後は引き継がない
   $("sBin").value="第"+(S.shifts.length+1)+"便";
-  $("sDrv").value=last?last.driver:"";
-  $("sTel").value=last?last.tel:"";
-  $("sId").value=""; $("sIdMsg").textContent=""; idState={kind:"",name:""};
+  $("sDrv").value=carry?last.driver:"";
+  $("sTel").value=carry?(last.tel||""):"";
+  $("sId").value=carry?(last.driverId||""):"";
+  $("sIdMsg").textContent=""; idState={kind:"",name:""};
+  if(carry&&last.driverId){ idState={kind:last.registered===false?"company":"driver",name:last.driver}; resolveId(); }
   let html="";
   if(last&&last.closed){
     const a=last.scans.filter(x=>x.size===3).length,b=last.scans.filter(x=>x.size===5).length;
