@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="バーコードSCAN">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<meta name="format-detection" content="telephone=no">
+<title>ジェット計数 — ゆうパケット</title>
+<style>
+:root{
+  --bg:#EEF1F5; --card:#FFFFFF; --ink:#12212E; --ink-2:#4A5B6B; --line:#D3DBE3;
+  --blue:#14528F; --blue-bg:#DBE8F6; --amber:#8A4B00; --amber-bg:#FAE6CC;
+  --red:#A8231C; --red-bg:#F7D6D2; --warn:#7A5A00; --warn-bg:#FBEFC4;
+  --ok:#1D6B45; --ok-bg:#D8EEE2; --lock:#E3E7EC;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:15px;line-height:1.45;display:flex;flex-direction:column;
+  height:100dvh;overflow:hidden;user-select:none;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.hide{display:none !important}
+
+header{background:var(--card);border-bottom:1px solid var(--line);padding:8px 12px;
+  display:flex;align-items:center;gap:8px;flex:0 0 auto}
+header .binfo{flex:1;min-width:0}
+header .bname{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .bsub{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{border:1px solid var(--line);background:#F6F8FA;color:var(--ink);border-radius:8px;
+  padding:9px 12px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer}
+.btn:active{background:#E6EBF1}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn.dim{color:var(--ink-2);font-weight:500}
+.btn.wide{width:100%;margin-top:8px}
+.btn.go{background:var(--blue-bg);border-color:#8FB4D8;color:var(--blue);font-size:18px;padding:16px}
+.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.btn[disabled]{opacity:.45}
+
+/* start view */
+#vStart{flex:1;overflow-y:auto;padding:16px 14px 24px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.panel h1{font-size:17px;margin:0 0 12px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:4px}
+.field input{width:100%;padding:12px;font-size:17px;font-family:inherit;color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;background:#FBFCFD}
+.field input:focus{outline:2px solid var(--blue)}
+.prev{margin-top:14px;font-size:13px;color:var(--ink-2)}
+.prev b{color:var(--ink)}
+
+/* counters */
+.counts{display:flex;gap:8px;padding:10px 12px 0;flex:0 0 auto}
+.cbox{flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px 10px;text-align:center}
+.cbox .lab{font-size:12px;color:var(--ink-2);font-weight:600}
+.cbox .val{font-size:34px;font-weight:800;line-height:1.05;letter-spacing:-.02em}
+.cbox.t3{border-color:#A9C4E0;background:var(--blue-bg)}
+.cbox.t3 .val,.cbox.t3 .lab{color:var(--blue)}
+.cbox.t5{border-color:#DDBE93;background:var(--amber-bg)}
+.cbox.t5 .val,.cbox.t5 .lab{color:var(--amber)}
+.cbox.tt .val{font-size:38px}
+
+.band{margin:10px 12px 0;border-radius:10px;padding:10px 12px;border:1px solid var(--line);
+  background:var(--card);min-height:64px;display:flex;flex-direction:column;justify-content:center}
+.band .b1{font-size:15px;font-weight:700}
+.band .b2{font-size:20px;font-weight:700;letter-spacing:.04em;margin-top:2px}
+.band .b3{font-size:12px;color:var(--ink-2);margin-top:2px}
+.band.ok{background:var(--ok-bg);border-color:#A9D3BE}
+.band.ok .b1{color:var(--ok)}
+.band.dup{background:var(--red-bg);border-color:#E0A9A3}
+.band.dup .b1,.band.dup .b2{color:var(--red)}
+.band.warn{background:var(--warn-bg);border-color:#DFC97A}
+.band.warn .b1,.band.warn .b2{color:var(--warn)}
+.band .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+
+.modes{display:flex;gap:8px;padding:10px 12px 0;flex:0 0 auto}
+.mode{flex:1;border-radius:10px;border:2px solid var(--line);background:var(--card);
+  padding:12px 8px;font-family:inherit;font-size:17px;font-weight:700;color:var(--ink-2);cursor:pointer}
+.mode .hint{display:block;font-size:11px;font-weight:600;margin-top:2px}
+.mode.on3{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.mode.on5{border-color:var(--amber);background:var(--amber-bg);color:var(--amber)}
+
+.listwrap{flex:1 1 auto;overflow-y:auto;padding:10px 12px 92px;-webkit-overflow-scrolling:touch}
+.lhead{font-size:12px;font-weight:700;color:var(--ink-2);margin:2px 2px 6px;display:flex;justify-content:space-between}
+.row{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px;
+  margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.row .no{flex:1;font-size:16px;font-weight:600;letter-spacing:.03em}
+.row .tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;border:1px solid}
+.tag3{color:var(--blue);background:var(--blue-bg);border-color:#A9C4E0}
+.tag5{color:var(--amber);background:var(--amber-bg);border-color:#DDBE93}
+.row .tm{font-size:11px;color:var(--ink-2)}
+.row .x{border:none;background:none;color:var(--red);font-size:13px;font-weight:700;padding:4px 6px;cursor:pointer;font-family:inherit}
+.empty{color:var(--ink-2);font-size:13px;text-align:center;padding:24px 12px}
+
+footer{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:flex;gap:8px;z-index:10}
+footer .btn{flex:1}
+
+/* lock */
+#lockView{position:fixed;inset:0;z-index:60;background:var(--lock);display:none;
+  flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+#lockView.on{display:flex}
+#lockView .lt{font-size:20px;font-weight:800;letter-spacing:.02em}
+#lockView .lb{font-size:13px;color:var(--ink-2);margin-top:6px}
+#lockView .lc{font-size:56px;font-weight:800;margin-top:22px;line-height:1}
+#lockView .lcs{font-size:13px;color:var(--ink-2);margin-top:4px}
+#unlock{margin-top:34px;position:relative;overflow:hidden;border:1px solid #B9C3CD;background:#F6F8FA;
+  border-radius:10px;padding:18px 26px;font-size:16px;font-weight:700;color:var(--ink);font-family:inherit}
+#unlock .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#C8D8E8}
+#unlock span.t{position:relative}
+
+/* sheets */
+.scrim{position:fixed;inset:0;background:rgba(12,20,28,.45);display:none;z-index:20}
+.scrim.on{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--bg);
+  border-radius:14px 14px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+  max-height:88dvh;overflow-y:auto;display:none}
+.sheet.on{display:block}
+.sheet h2{font-size:17px;margin:0 0 10px}
+.sheet h3{font-size:13px;color:var(--ink-2);margin:16px 0 6px}
+.alertbox{background:var(--red-bg);border:1px solid #E0A9A3;border-radius:10px;padding:12px;margin-bottom:10px}
+.alertbox .an{font-size:22px;font-weight:800;color:var(--red);letter-spacing:.04em}
+.alertbox .ar{font-size:14px;margin-top:8px}
+.alertbox .ar b{font-size:17px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{padding:7px 9px;font-size:13px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{background:#F2F5F8;font-size:12px;color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+tfoot td{font-weight:700;background:#F2F5F8}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:600;padding:5px 9px;border-radius:6px;border:1px solid var(--line);
+  background:var(--card);display:flex;align-items:center;gap:6px}
+.chip.no{color:var(--red);background:var(--red-bg);border-color:#E0A9A3}
+.chip button{border:none;background:none;font-size:12px;color:var(--ink-2);padding:0 2px;cursor:pointer;font-family:inherit}
+.note{font-size:12px;color:var(--ink-2);margin:6px 2px 0;user-select:text}
+.rowbtns{display:flex;gap:8px}
+.rowbtns .btn{flex:1;margin-top:8px}
+a.tel{color:var(--blue);font-weight:700;text-decoration:none}
+.askscrim{position:fixed;inset:0;background:rgba(12,20,28,.5);z-index:80;display:none}
+.askscrim.on{display:block}
+.askbox{position:fixed;z-index:81;left:14px;right:14px;top:50%;transform:translateY(-50%);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;
+  display:none;max-height:80dvh;overflow-y:auto;box-shadow:0 8px 28px rgba(12,20,28,.25)}
+.askbox.on{display:block}
+.askbox h2{font-size:17px;margin:0 0 8px}
+.askbox .body{font-size:14px;white-space:pre-line;margin-bottom:12px}
+.lbtns{display:flex;gap:6px;align-items:center;margin:0 2px 8px}
+.lbtns .selinfo{font-size:12px;color:var(--ink-2);font-weight:600;margin-left:auto}
+.btn.danger{color:var(--red);border-color:#E0A9A3;background:var(--red-bg)}
+.row.pick{border-color:var(--blue);background:var(--blue-bg)}
+.row .ck{width:22px;height:22px;border:2px solid #9FB4C7;border-radius:5px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--blue)}
+.row.pick .ck{border-color:var(--blue);background:#BFD6EC}
+.row.del{background:#F1F3F6;border-style:dashed}
+.row.del .no{text-decoration:line-through;color:var(--ink-2)}
+.admrow{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:7px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.admrow .a1{flex:1;min-width:0}
+.admrow .ttl{font-weight:700;font-size:15px}
+.admrow .meta{font-size:12px;color:var(--ink-2);margin-top:2px}
+.admrow .qty{font-size:22px;font-weight:800;letter-spacing:-.01em}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;border:1px solid;margin-top:4px}
+.b-done{color:var(--ok);background:var(--ok-bg);border-color:#A9D3BE}
+.b-todo{color:var(--warn);background:var(--warn-bg);border-color:#DFC97A}
+.b-open{color:var(--blue);background:var(--blue-bg);border-color:#A9C4E0}
+select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;background:var(--card)}
+</style>
+</head>
+<body>
+
+<!-- ============ 開始画面 ============ -->
+<div id="vStart">
+  <div class="panel">
+    <h1>集荷を始める</h1>
+    <div class="field"><label for="sBin">便名</label><input id="sBin" type="text" placeholder="第1便"></div>
+    <div class="field"><label for="sDrv">ドライバー名</label><input id="sDrv" type="text" placeholder="氏名"></div>
+    <div class="field"><label for="sTel">電話番号</label><input id="sTel" type="tel" inputmode="tel" placeholder="090-0000-0000"></div>
+    <button class="btn go wide" id="btnStart">集荷スタート</button>
+    <div class="prev" id="startPrev"></div>
+  </div>
+  <button class="btn wide dim" id="btnSumFromStart">本日の集計を見る</button>
+  <button class="btn wide hide" id="btnResume">計数中の便に戻る</button>
+  <button class="btn wide" id="btnFinish">業務終了</button>
+  <button class="btn wide dim" id="btnAdmin">管理画面</button>
+</div>
+
+<!-- ============ 計数画面 ============ -->
+<div id="vScan" class="hide" style="display:flex;flex-direction:column;flex:1;min-height:0">
+  <header>
+    <div class="binfo">
+      <div class="bname" id="hBin">第1便</div>
+      <div class="bsub" id="hSub"></div>
+    </div>
+    <button class="btn sm" id="btnCall">発信</button>
+    <button class="btn sm dim" id="btnMenu">集計</button>
+  </header>
+
+  <div class="counts">
+    <div class="cbox t3"><div class="lab">3cm</div><div class="val num" id="c3">0</div></div>
+    <div class="cbox t5"><div class="lab">5cm</div><div class="val num" id="c5">0</div></div>
+    <div class="cbox tt"><div class="lab">この便 合計</div><div class="val num" id="ct">0</div></div>
+  </div>
+
+  <div class="band" id="band">
+    <div class="b1" id="bandT">読取待ち</div>
+    <div class="b3" id="bandS">リーダーで読むか、下の手入力から</div>
+    <div class="acts" id="bandA"></div>
+  </div>
+
+  <div class="modes">
+    <button class="mode" id="m3">3cm<span class="hint" id="m3hint">通常</span></button>
+    <button class="mode" id="m5">5cm<span class="hint" id="m5hint">固定</span></button>
+  </div>
+
+  <div class="listwrap">
+    <div class="lhead"><span>読取履歴（この便）</span><span id="lcount"></span></div>
+    <div class="lbtns">
+      <button class="btn sm dim" id="btnSel">選択削除</button>
+      <button class="btn sm dim" id="btnDelAll">全件削除</button>
+      <span class="selinfo" id="selInfo"></span>
+    </div>
+    <div id="list"></div>
+  </div>
+
+  <footer>
+    <button class="btn" id="btnManual">手入力</button>
+    <button class="btn" id="btnLock">画面ロック</button>
+    <button class="btn" id="btnClose">締める</button>
+  </footer>
+</div>
+
+<!-- ============ ロック画面 ============ -->
+<div id="lockView">
+  <div class="lt">画面ロック中</div>
+  <div class="lb" id="lockSub"></div>
+  <div class="lc num" id="lockCount">0</div>
+  <div class="lcs" id="lockBreak"></div>
+  <button id="unlock"><span class="fill" id="ufill"></span><span class="t">長押しで解除</span></button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="askscrim" id="askScrim"></div>
+<div class="askbox" id="askBox">
+  <h2 id="askTitle"></h2>
+  <div class="body" id="askBody"></div>
+  <div class="field hide" id="askField"><input id="askInput" type="tel" inputmode="numeric" autocomplete="off"></div>
+  <button class="btn wide" id="askOk">OK</button>
+  <button class="btn wide dim" id="askCancel">キャンセル</button>
+</div>
+
+<!-- 重複アラート -->
+<div class="sheet" id="shDup">
+  <h2>二度読みを検知しました</h2>
+  <div class="alertbox">
+    <div class="an num" id="dupNo"></div>
+    <div class="ar">今回の読取　<b class="num" id="dupNow"></b></div>
+    <div class="ar">最初の読取　<b class="num" id="dupFirst"></b>　<span id="dupBin"></span></div>
+  </div>
+  <p class="note">この読取はカウントしていません。同じ荷物を2回通したか、荷物自体が重複している可能性があります。記録は集計画面に残ります。</p>
+  <button class="btn wide" id="dupAck">確認した（カウントしない）</button>
+</div>
+
+<!-- 手入力 -->
+<div class="sheet" id="shManual">
+  <h2>番号を手入力</h2>
+  <div class="field"><label for="inNo">お問い合わせ番号</label><input id="inNo" type="tel" inputmode="numeric" maxlength="14" placeholder="123456789012（12桁）"></div>
+  <div class="rowbtns">
+    <button class="btn" id="btnMan3">3cmで登録</button>
+    <button class="btn" id="btnMan5">5cmで登録</button>
+  </div>
+  <button class="btn wide dim" data-close>閉じる</button>
+</div>
+
+<!-- 集計 -->
+<!-- 管理画面 -->
+<div class="sheet" id="shAdmin">
+  <h2>管理画面</h2>
+  <div class="field"><label for="admDay">日付</label><select class="day" id="admDay"></select></div>
+  <div id="admSummary"></div>
+  <h3>便の一覧</h3>
+  <div id="admList"></div>
+  <h3>提出用（ジェットグループ様へ渡す）</h3>
+  <button class="btn wide" id="btnSubDay">この日の全便を書き出す</button>
+  <button class="btn wide" id="btnSubNew">未書き出しの便だけ書き出す</button>
+  <p class="note">列は 日付・便・ドライバー・サイズ・番号・読取時刻 のみです。便ごとに書き出す場合は、上の一覧から便を開いてください。</p>
+
+  <div id="admInternal">
+    <h3>本日のデータ</h3>
+    <button class="btn wide danger" id="btnWipeToday">本日のデータを全消去する</button>
+    <p class="note">テストで作った便を片付けるためのものです。本日の便・読取・記録がすべて消えます。過去日は消えません。</p>
+
+    <h3>社内用（記録の追跡まで含む）</h3>
+    <button class="btn wide dim" id="btnExpDay">この日を全部書き出す</button>
+    <button class="btn wide dim" id="btnExpAll">全期間を書き出す</button>
+    <p class="note">二度読みの検知や電話番号まで含みます。先方に渡すものではありません。</p>
+  </div>
+  <button class="btn wide dim" data-close>閉じる</button>
+</div>
+
+<!-- 便の明細 -->
+<div class="sheet" id="shDetail">
+  <h2 id="detTitle">便の明細</h2>
+  <div id="detMeta"></div>
+  <h3>読取</h3>
+  <div id="detScans"></div>
+  <div id="detInternal">
+    <h3>二度読みの記録</h3>
+    <div id="detDup"></div>
+    <h3>削除の記録</h3>
+    <div id="detDel"></div>
+  </div>
+  <button class="btn wide" id="detSub">この便の提出用CSVを書き出す</button>
+  <button class="btn wide dim" id="detBack">一覧に戻る</button>
+</div>
+
+<div class="sheet" id="shSum">
+  <h2>本日の集計</h2>
+  <table id="sumTable"><thead><tr><th>便 / ドライバー</th><th>3cm</th><th>5cm</th><th>合計</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+  <p class="note" id="sumNote"></p>
+
+  <h3>便ごとの開始・締め</h3>
+  <div id="times"></div>
+
+  <h3>業務終了の記録</h3>
+  <div id="endLog"></div>
+
+  <h3>二度読みの記録</h3>
+  <div id="dupLog"></div>
+
+  <h3>削除の記録</h3>
+  <div id="delLog"></div>
+  <p class="note">削除した読取はCSVには含みません。</p>
+
+  <h3>データ</h3>
+  <button class="btn wide" id="btnSubToday">提出用CSV（本日の全便）</button>
+  <button class="btn wide" id="btnNewShift">次の便を始める</button>
+  <button class="btn wide dim" data-close>閉じる</button>
+</div>
+
+<script>
+"use strict";
+const KEY="jet-scan-v2", AKEY="jet-scan-archive-v2";
+const $=id=>document.getElementById(id);
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+const hhmm=ts=>{const d=new Date(ts);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+const hms=ts=>{const d=new Date(ts);return hhmm(ts)+":"+String(d.getSeconds()).padStart(2,"0");};
+
+let S=load();
+let mode3=true, sheetOpen=false, locked=false;
+let selMode=false, sel=new Set();
+
+function blank(){ return {date:today(),shifts:[],active:-1,dupLog:[],delLog:[],ends:[]}; }
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY); if(!raw) return blank();
+    const s=JSON.parse(raw);
+    if(s.date!==today()){ archive(s); return blank(); }
+    s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; s.ends=s.ends||[]; return s;
+  }catch(e){ return blank(); }
+}
+function archive(s){ try{ const a=JSON.parse(localStorage.getItem(AKEY)||"[]"); a.push(s);
+  while(a.length>60)a.shift(); localStorage.setItem(AKEY,JSON.stringify(a)); }catch(e){} }
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+const cur=()=>S.shifts[S.active];
+const inScan=()=>S.active>=0 && cur() && !cur().closed;
+
+function normalize(v){ return String(v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[^0-9]/g,""); }
+const fmt=no=>no.length===12?no.slice(0,4)+"-"+no.slice(4,8)+"-"+no.slice(8):no;
+const LEN=12;
+function findFirst(no){
+  for(let i=0;i<S.shifts.length;i++){
+    const hit=S.shifts[i].scans.find(x=>x.no===no);
+    if(hit) return {ts:hit.ts,bin:S.shifts[i].bin,driver:S.shifts[i].driver};
+  }
+  return null;
+}
+
+let AC=null;
+function beep(freq,ms,vol){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended")AC.resume();
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type="square";o.frequency.value=freq;g.gain.value=vol||.07;
+    o.connect(g);g.connect(AC.destination);o.start();
+    setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},ms);
+  }catch(e){}
+}
+const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
+function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTimeout(()=>beep(210,380,.1),960); buzz([250,120,250,120,250]); }
+
+/* ---------- 音の初期化（iOS対策） ---------- */
+function unlockAudio(){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended")AC.resume();
+    const o=AC.createOscillator(),g=AC.createGain();
+    g.gain.value=0.0001;o.connect(g);g.connect(AC.destination);o.start();
+    setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},40);
+  }catch(e){}
+}
+document.addEventListener("touchstart",unlockAudio,{once:true});
+document.addEventListener("mousedown",unlockAudio,{once:true});
+
+/* ---------- 確認ダイアログ ---------- */
+let askOpen=false, askOnOk=null;
+function ask(o){
+  askOpen=true; askOnOk=o.onOk||null;
+  $("askTitle").textContent=o.title||"";
+  $("askBody").textContent=o.body||"";
+  $("askBody").style.display=o.body?"":"none";
+  $("askField").className=o.input?"field":"field hide";
+  $("askInput").value="";
+  $("askOk").textContent=o.okText||"OK";
+  $("askOk").className="btn wide"+(o.danger?" danger":"");
+  $("askCancel").className="btn wide dim"+(o.noCancel?" hide":"");
+  $("askScrim").classList.add("on"); $("askBox").classList.add("on");
+  if(o.input) setTimeout(()=>$("askInput").focus(),90);
+}
+function askClose(){ askOpen=false; askOnOk=null; $("askScrim").classList.remove("on"); $("askBox").classList.remove("on"); }
+$("askCancel").onclick=askClose;
+$("askScrim").onclick=askClose;
+$("askOk").onclick=()=>{ const v=$("askInput").value; const cb=askOnOk; askClose(); if(cb) cb(v); };
+$("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("askOk").click(); } });
+const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCancel:true});
+
+/* ---------- 読取 ---------- */
+function handle(raw){
+  const no=normalize(raw); if(!no) return;
+  if(!inScan()) return;
+
+  if(!/^\d{12}$/.test(no)){
+    setBand("dup","12桁ではありません",no,no.length+"桁を読み取りました。カウントしていません");
+    beep(220,320,.09); buzz([80,60,80]); return;
+  }
+  const first=findFirst(no);
+  if(first){ showDup(no,first); return; }
+
+  commit(no);
+}
+function commit(no){
+  const size=mode3?3:5;
+  cur().scans.push({no:no,size:size,ts:Date.now()});
+  save();
+  setBand("ok",size+"cm で登録",fmt(no),"この便 "+cur().scans.length+"件");
+  beep(size===5?1180:900,size===5?110:60,.06);
+  buzz(size===5?[40,40,40]:25);
+  render();
+}
+function showDup(no,first){
+  const now=Date.now();
+  S.dupLog.push({no:no,ts:now,firstTs:first.ts,firstBin:first.bin,bin:cur().bin});
+  save();
+  $("dupNo").textContent=fmt(no);
+  $("dupNow").textContent=hms(now);
+  $("dupFirst").textContent=hms(first.ts);
+  $("dupBin").textContent="（"+first.bin+(first.driver?" / "+first.driver:"")+"）";
+  alarm(); openSheet("shDup");
+  setBand("dup","二度読み検知",fmt(no),hms(first.ts)+" に読取済み");
+  render();
+}
+$("dupAck").onclick=()=>{ closeSheets(); };
+
+function setBand(cls,t,big,sub){
+  const b=$("band"); b.className="band"+(cls?" "+cls:"");
+  b.innerHTML='<div class="b1"></div>'+(big?'<div class="b2 num"></div>':'')+'<div class="b3"></div><div class="acts" id="bandA"></div>';
+  b.querySelector(".b1").textContent=t;
+  if(big) b.querySelector(".b2").textContent=big;
+  b.querySelector(".b3").textContent=sub||"";
+}
+/* ---------- 画面切替 ---------- */
+function showView(){
+  const scan=inScan();
+  $("vStart").className=scan?"hide":"";
+  $("vScan").className=scan?"":"hide";
+  if(scan) $("vScan").style.display="flex";
+  if(!scan) prepStart();
+}
+function openShiftIdx(){ return S.shifts.findIndex(sh=>!sh.closed); }
+function prepStart(){
+  const oi=openShiftIdx();
+  $("btnResume").className="btn wide"+(oi<0?" hide":"");
+  if(oi>=0) $("btnResume").textContent=S.shifts[oi].bin+"（計数中）に戻る";
+  const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  $("sBin").value="第"+(S.shifts.length+1)+"便";
+  $("sDrv").value=last?last.driver:"";
+  $("sTel").value=last?last.tel:"";
+  let html="";
+  if(last&&last.closed){
+    const a=last.scans.filter(x=>x.size===3).length,b=last.scans.filter(x=>x.size===5).length;
+    html="直前：<b>"+last.bin+"</b>　"+(last.driver||"")+"<br>"+
+         "開始 <b>"+hhmm(last.startedAt)+"</b>　締め <b>"+hhmm(last.closedAt)+"</b>　計 <b>"+(a+b)+"</b>個";
+    if(last.tel) html+='<br><a class="tel" href="tel:'+last.tel.replace(/[^0-9+]/g,"")+'">'+last.tel+" に発信</a>";
+  }
+  if(S.ends.length){
+    html+=(html?"<br><br>":"")+"本日の業務終了：<b>"+S.ends.map(e=>e.driver+" "+hhmm(e.ts)).join("</b>　<b>")+"</b>";
+  }
+  $("startPrev").innerHTML=html;
+}
+$("btnResume").onclick=()=>{
+  const oi=openShiftIdx(); if(oi<0) return;
+  S.active=oi; save(); showView(); render();
+};
+$("btnFinish").onclick=()=>{
+  const drv=$("sDrv").value.trim();
+  const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  if(!S.shifts.length){ notify("記録がありません","本日はまだ便が始まっていません。"); return; }
+  const oi=openShiftIdx();
+  if(oi>=0){ notify("締めていない便があります",S.shifts[oi].bin+" がまだ締まっていません。\n上の「"+S.shifts[oi].bin+"（計数中）に戻る」から締めてください。"); return; }
+  const name=drv||(last?last.driver:"");
+  const todo=S.shifts.filter(sh=>sh.closed&&!sh.exportedAt).length;
+  ask({title:"業務終了を記録します",
+    body:name+"　"+hhmm(Date.now())+(todo?"\n未書き出しの便が "+todo+"便 あります。あとから管理画面で書き出せます。":""),
+    okText:"終了する",
+    onOk:()=>{
+      S.ends.push({driver:name,tel:$("sTel").value.trim()||(last?last.tel:""),ts:Date.now()});
+      save(); beep(660,140,.06); prepStart();
+      notify("業務終了を記録しました",name+"　"+hhmm(S.ends[S.ends.length-1].ts)+"\n続けて稼働する場合は、そのまま次の便を始められます。");
+    }});
+};
+$("btnStart").onclick=()=>{
+  const drv=$("sDrv").value.trim();
+  if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
+  S.shifts.push({id:Date.now(),bin:$("sBin").value.trim()||("第"+(S.shifts.length+1)+"便"),
+    driver:drv,tel:$("sTel").value.trim(),startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
+  S.active=S.shifts.length-1; save();
+  mode3=true; selMode=false; sel.clear();
+  setBand("",cur().bin+" 開始 "+hhmm(cur().startedAt),"","読取待ち");
+  showView(); render();
+  beep(880,80,.05);
+};
+$("btnSumFromStart").onclick=openSummary;
+
+/* ---------- 描画 ---------- */
+function render(){
+  if(!inScan()){ showView(); return; }
+  const sh=cur();
+  const c3=sh.scans.filter(x=>x.size===3).length, c5=sh.scans.filter(x=>x.size===5).length;
+  $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
+  $("hBin").textContent=sh.bin;
+  $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt);
+  $("btnCall").disabled=!sh.tel;
+  $("m3").className="mode"+(mode3?" on3":"");
+  $("m5").className="mode"+(mode3?"":" on5");
+  $("m3hint").textContent=mode3?"固定中":"切替";
+  $("m5hint").textContent=mode3?"切替":"固定中";
+  $("lcount").textContent=sh.scans.length+"件";
+  $("btnSel").textContent=selMode?"選択をやめる":"選択削除";
+  $("btnSel").className="btn sm"+(selMode?"":" dim");
+  $("btnDelAll").className="btn sm"+(selMode?" danger":" dim");
+  $("btnDelAll").textContent=selMode?("選択した"+sel.size+"件を削除"):"全件削除";
+  $("btnDelAll").disabled=selMode&&sel.size===0;
+  $("selInfo").textContent=selMode?"行をタップで選択":"";
+
+  const l=$("list");
+  if(!sh.scans.length){ l.innerHTML='<div class="empty">まだ読み取りがありません</div>'; }
+  else{
+    l.innerHTML=sh.scans.slice(-60).reverse().map(x=>
+      '<div class="row'+(selMode&&sel.has(x.no)?" pick":"")+'" data-no="'+x.no+'">'+
+      (selMode?'<span class="ck">'+(sel.has(x.no)?"✓":"")+'</span>':'')+
+      '<span class="no num">'+fmt(x.no)+'</span>'+
+      '<span class="tag tag'+x.size+'">'+x.size+'cm</span>'+
+      '<span class="tm num">'+hhmm(x.ts)+'</span>'+
+      (selMode?'':'<button class="x" data-del="'+x.no+'">削除</button>')+
+      '</div>').join("");
+    if(selMode){
+      l.querySelectorAll("[data-no]").forEach(r=>r.onclick=()=>{
+        const no=r.getAttribute("data-no");
+        if(sel.has(no)) sel.delete(no); else sel.add(no);
+        render();
+      });
+    }else{
+      l.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+        const no=b.getAttribute("data-del");
+        const x=sh.scans.find(v=>v.no===no); if(!x) return;
+        ask({title:"この読取を削除します",body:fmt(no)+"　"+x.size+"cm　"+hhmm(x.ts),okText:"削除する",danger:true,
+          onOk:()=>{ removeScans([x],"個別削除"); setBand("","1件削除しました",fmt(no),"この便 "+sh.scans.length+"件"); }});
+      });
+    }
+  }
+  if(locked) paintLock();
+}
+
+/* ---------- 削除 ---------- */
+function removeScans(items,kind){
+  const sh=cur(), now=Date.now();
+  const nos=new Set(items.map(x=>x.no));
+  items.forEach(x=>S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:kind}));
+  sh.scans=sh.scans.filter(x=>!nos.has(x.no));
+  sel.clear(); save(); render();
+}
+$("btnSel").onclick=()=>{ selMode=!selMode; sel.clear(); render(); };
+$("btnDelAll").onclick=()=>{
+  const sh=cur();
+  if(selMode){
+    if(!sel.size) return;
+    const items=sh.scans.filter(x=>sel.has(x.no));
+    ask({title:"選択した "+items.length+"件 を削除します",body:"削除の記録には残ります。",okText:"削除する",danger:true,
+      onOk:()=>{ removeScans(items,"選択削除"); selMode=false;
+        setBand("",items.length+"件を削除しました","","この便 "+sh.scans.length+"件");
+        beep(300,200,.08); buzz([120,80,120]); render(); }});
+  }else{
+    if(!sh.scans.length) return;
+    const n=sh.scans.length;
+    ask({title:sh.bin+" の読取 "+n+"件 をすべて削除します",
+      body:"この便の計数は0からやり直しになります。削除の記録には残ります。",okText:"全件削除する",danger:true,
+      onOk:()=>{ ask({title:"本当に全件削除しますか",body:n+"件が消えます。",okText:"削除を実行する",danger:true,
+        onOk:()=>{ removeScans(sh.scans.slice(),"全件削除");
+          setBand("warn","全件削除しました","","この便 0件。最初から読み直してください");
+          beep(300,200,.08); buzz([120,80,120]); }}); }});
+  }
+};
+$("btnCall").onclick=()=>{ const t=cur().tel; if(t) location.href="tel:"+t.replace(/[^0-9+]/g,""); };
+
+/* ---------- ロック ---------- */
+function paintLock(){
+  const sh=cur(); if(!sh) return;
+  const c3=sh.scans.filter(x=>x.size===3).length,c5=sh.scans.filter(x=>x.size===5).length;
+  $("lockSub").textContent=sh.bin+" / "+sh.driver;
+  $("lockCount").textContent=c3+c5;
+  $("lockBreak").textContent="3cm "+c3+" ・ 5cm "+c5;
+}
+function setLock(v){
+  locked=v; $("lockView").classList.toggle("on",v);
+  if(v) paintLock();
+}
+$("btnLock").onclick=()=>setLock(true);
+let lockWarnT=null;
+function notifyLocked(){
+  if(lockWarnT) return;
+  $("lockBreak").textContent="ロック中です。読み取っていません";
+  beep(300,180,.08); buzz([100,80,100]);
+  lockWarnT=setTimeout(()=>{ lockWarnT=null; paintLock(); },2500);
+}
+(function(){
+  const b=$("unlock"), f=$("ufill"); let t0=0,raf=null;
+  const step=()=>{
+    const p=Math.min(1,(Date.now()-t0)/1200);
+    f.style.width=(p*100)+"%";
+    if(p>=1){ stop(); setLock(false); beep(880,70,.05); }
+    else raf=requestAnimationFrame(step);
+  };
+  const stop=()=>{ if(raf)cancelAnimationFrame(raf); raf=null; f.style.width="0"; };
+  b.addEventListener("pointerdown",e=>{ e.preventDefault(); t0=Date.now(); raf=requestAnimationFrame(step); });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,stop));
+})();
+
+/* ---------- リーダー入力 ---------- */
+let buf="", bufT=0;
+document.addEventListener("keydown",e=>{
+  if(locked){ notifyLocked(); return; }
+  if(sheetOpen||askOpen||!inScan()) return;
+  const now=Date.now();
+  if(now-bufT>400) buf="";
+  bufT=now;
+  if(e.key==="Enter"||e.key==="Tab"){ e.preventDefault(); if(buf.length>=6) handle(buf); buf=""; return; }
+  if(e.key.length===1){ buf+=e.key; if(buf.length>40)buf=buf.slice(-40); }
+});
+
+/* ---------- シート ---------- */
+function openSheet(id){ sheetOpen=true; $("scrim").classList.add("on"); $(id).classList.add("on"); }
+function closeSheets(){ sheetOpen=false; $("scrim").classList.remove("on");
+  document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("on")); }
+$("scrim").onclick=()=>{ if($("shDup").classList.contains("on")) return; closeSheets(); };
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheets);
+
+function setMode(v){
+  if(mode3===v){ render(); return; }
+  mode3=v;
+  setBand(v?"":"warn",(v?"3cm":"5cm")+"に固定しました","",v?"以後の読取は3cmで計数します":"3cmに戻すまで5cmで計数します");
+  beep(v?900:1180,90,.06); render();
+}
+$("m3").onclick=()=>setMode(true);
+$("m5").onclick=()=>setMode(false);
+
+$("btnManual").onclick=()=>{ $("inNo").value=""; openSheet("shManual"); setTimeout(()=>$("inNo").focus(),80); };
+$("btnMan3").onclick=()=>{ const v=$("inNo").value; mode3=true; closeSheets(); handle(v); };
+$("btnMan5").onclick=()=>{ const v=$("inNo").value; mode3=false; closeSheets(); handle(v); };
+$("btnMenu").onclick=openSummary;
+
+$("btnClose").onclick=()=>{
+  const sh=cur();
+  if(!sh.scans.length){ setBand("warn","読取が0件です","","締める前に読み取ってください"); return; }
+  const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
+  ask({title:sh.bin+"（"+sh.driver+"）を締めます",
+    body:"3cm "+a+"個　5cm "+b+"個　計 "+(a+b)+"個\n締め時刻 "+hhmm(Date.now()),okText:"締める",
+    onOk:()=>{ sh.closed=true; sh.closedAt=Date.now(); save(); beep(880,120,.06); openSummary(); showView(); }});
+};
+$("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
+
+/* ---------- 集計 ---------- */
+function openSummary(){
+  const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
+  let t3=0,t5=0;
+  tb.innerHTML=S.shifts.length?S.shifts.map(sh=>{
+    const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
+    t3+=a;t5+=b;
+    return "<tr><td>"+sh.bin+"<br><span style='font-size:11px;color:#4A5B6B'>"+(sh.driver||"")+"</span></td><td class='num'>"+a+"</td><td class='num'>"+b+"</td><td class='num'>"+(a+b)+"</td></tr>";
+  }).join(""):"<tr><td colspan='4'>まだ便がありません</td></tr>";
+  tf.innerHTML="<tr><td>本日合計</td><td class='num'>"+t3+"</td><td class='num'>"+t5+"</td><td class='num'>"+(t3+t5)+"</td></tr>";
+  $("sumNote").textContent="差出票へ転記：3cm "+t3+"個、5cm "+t5+"個、計 "+(t3+t5)+"個";
+
+  $("times").innerHTML=S.shifts.length?S.shifts.map(sh=>{
+    const tel=sh.tel?' ・ <a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">発信</a>':"";
+    return '<div class="row"><span style="flex:1"><b>'+sh.bin+"</b> "+(sh.driver||"")+
+      '<br><span style="font-size:12px;color:#4A5B6B">開始 '+hhmm(sh.startedAt)+
+      "　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+tel+"</span></span></div>";
+  }).join(""):'<p class="note">なし</p>';
+
+  $("endLog").innerHTML=S.ends.length?S.ends.map(e=>
+    '<div class="row"><span style="flex:1"><b>'+e.driver+"</b>"+(e.tel?' <span style="font-size:12px;color:#4A5B6B">'+e.tel+"</span>":"")+
+    '</span><span class="tm num" style="font-size:14px;font-weight:700">'+hhmm(e.ts)+"</span></div>").join("")
+    :'<p class="note">なし</p>';
+
+  $("dupLog").innerHTML=S.dupLog.length?S.dupLog.map(d=>
+    '<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1">'+
+    '<b class="num">'+fmt(d.no)+"</b><br>"+
+    '<span style="font-size:12px;color:#4A5B6B">検知 '+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join("")
+    :'<p class="note">なし</p>';
+
+  $("delLog").innerHTML=S.delLog.length?S.delLog.slice().reverse().map(d=>
+    '<div class="row del"><span style="flex:1"><b class="num">'+fmt(d.no)+"</b> "+
+    '<span class="tag tag'+d.size+'">'+d.size+'cm</span>'+
+    '<br><span style="font-size:12px;color:#4A5B6B">'+d.kind+" "+hms(d.delTs)+"　読取 "+hms(d.ts)+"（"+d.bin+(d.driver?" / "+d.driver:"")+"）</span></span></div>").join("")
+    :'<p class="note">なし</p>';
+
+  openSheet("shSum");
+}
+
+/* ---------- CSV ---------- */
+const CSVHEAD="日付,便,ドライバー,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
+function csvBody(day,shifts,withLogs){
+  let out="";
+  shifts.forEach(sh=>{
+    const base=[day.date,sh.bin,sh.driver,sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
+    sh.scans.forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
+  });
+  if(withLogs)(day.dupLog||[]).forEach(x=>{
+    out+=[day.date,x.bin,"","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
+  });
+  return out;
+}
+function download(name,text){
+  const blob=new Blob(["\uFEFF"+text],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+
+/* ---------- 提出用CSV ---------- */
+const ORG="osakakyuhai";
+const SUBHEAD="日付,便,ドライバー,サイズcm,お問い合わせ番号,読取時刻\n";
+function binNo(day,sh){
+  const m=String(sh.bin).match(/(\d+)/);
+  if(m) return m[1];
+  return String(day.shifts.indexOf(sh)+1);
+}
+const ymd=d=>String(d).replace(/-/g,"");
+function csvSubmit(day,shifts){
+  let out=SUBHEAD;
+  shifts.forEach(sh=>{
+    sh.scans.forEach(x=>{
+      out+=[day.date,sh.bin,sh.driver,x.size,x.no,hms(x.ts)].join(",")+"\n";
+    });
+  });
+  return out;
+}
+function submitName(day,shifts){
+  if(shifts.length===1) return ORG+"_"+ymd(day.date)+"_bin"+binNo(day,shifts[0])+".csv";
+  return ORG+"_"+ymd(day.date)+".csv";
+}
+function exportSubmit(day,shifts){
+  if(!shifts.length){ notify("書き出す便がありません",""); return; }
+  const rows=shifts.reduce((n,sh)=>n+sh.scans.length,0);
+  if(!rows){ notify("読取が0件です","この範囲には番号がありません。"); return; }
+  download(submitName(day,shifts),csvSubmit(day,shifts));
+  markExported(day,shifts);
+}
+
+/* ---------- 管理画面 ---------- */
+const PIN_STAFF="1108";   // 大阪急配（社内）
+const PIN_CLIENT="0981";  // ジェットグループ様
+let adminOK=false, isStaff=false, admArchive=[], admDate=null;
+
+function readArchive(){ try{ return JSON.parse(localStorage.getItem(AKEY)||"[]"); }catch(e){ return []; } }
+function writeArchive(a){ try{ localStorage.setItem(AKEY,JSON.stringify(a)); }catch(e){} }
+function allDays(){ return readArchive().concat([S]); }
+function dayByDate(d){ if(d===S.date) return S; return admArchive.find(x=>x.date===d)||null; }
+function persistDay(day){ if(day===S){ save(); } else { writeArchive(admArchive); } }
+function markExported(day,shifts){
+  const now=Date.now();
+  shifts.forEach(sh=>{ sh.exportedAt=now; });
+  persistDay(day); if(day===S) save();
+  if($("shAdmin").classList.contains("on")) renderAdmin();
+}
+const cnt=sh=>({a:sh.scans.filter(x=>x.size===3).length,b:sh.scans.filter(x=>x.size===5).length});
+
+$("btnAdmin").onclick=()=>{
+  if(!adminOK){
+    ask({title:"管理画面",body:"暗証番号を入力してください。",input:true,okText:"開く",
+      onOk:v=>{
+        const t=String(v).trim();
+        if(t===PIN_STAFF){ isStaff=true; }
+        else if(t===PIN_CLIENT){ isStaff=false; }
+        else { notify("暗証番号が違います",""); return; }
+        adminOK=true; openAdmin();
+      }});
+    return;
+  }
+  openAdmin();
+};
+function openAdmin(){
+  admArchive=readArchive();
+  const days=admArchive.map(d=>d.date).filter(d=>d!==S.date).concat([S.date]).reverse();
+  admDate=admDate&&days.includes(admDate)?admDate:S.date;
+  $("admDay").innerHTML=days.map(d=>'<option value="'+d+'"'+(d===admDate?" selected":"")+">"+d+(d===S.date?"（本日）":"")+"</option>").join("");
+  renderAdmin(); openSheet("shAdmin");
+}
+$("admDay").onchange=()=>{ admDate=$("admDay").value; renderAdmin(); };
+
+function renderAdmin(){
+  $("admInternal").className=isStaff?"":"hide";
+  const day=dayByDate(admDate);
+  if(!day){ $("admSummary").innerHTML='<p class="note">この日のデータがありません</p>'; $("admList").innerHTML=""; return; }
+  let t3=0,t5=0,todo=0;
+  day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; if(sh.closed&&!sh.exportedAt) todo++; });
+  $("admSummary").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
+    '<div style="font-size:13px;color:#4A5B6B;font-weight:600">'+admDate+" の合計</div>"+
+    '<div style="font-size:30px;font-weight:800;margin-top:2px">'+(t3+t5)+'<span style="font-size:15px;font-weight:600"> 個</span></div>'+
+    '<div style="font-size:14px;margin-top:2px">3cm '+t3+"　5cm "+t5+"　便数 "+day.shifts.length+"</div>"+
+    (todo?'<div class="badge b-todo" style="margin-top:8px">未書き出し '+todo+"便</div>":'<div class="badge b-done" style="margin-top:8px">書き出し済み</div>')+
+    "</div>";
+
+  const ends=day.ends||[];
+  $("admList").innerHTML=(day.shifts.length?day.shifts.map((sh,i)=>{
+    const c=cnt(sh);
+    const bad=sh.closed?(sh.exportedAt?'<span class="badge b-done">書き出し済 '+hhmm(sh.exportedAt)+"</span>":'<span class="badge b-todo">未書き出し</span>')
+                       :'<span class="badge b-open">計数中</span>';
+    return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+sh.bin+"　"+(sh.driver||"")+"</div>"+
+      '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
+      '</div><div class="qty num">'+(c.a+c.b)+"</div></div>";
+  }).join(""):'<p class="note">便がありません</p>')+
+    (ends.length?'<div class="lhead" style="margin-top:10px">業務終了</div>'+ends.map(e=>
+      '<div class="row"><span style="flex:1"><b>'+e.driver+'</b></span><span class="tm num" style="font-size:14px;font-weight:700">'+hhmm(e.ts)+"</span></div>").join(""):"");
+  $("admList").querySelectorAll("[data-i]").forEach(r=>r.onclick=()=>openDetail(day,parseInt(r.getAttribute("data-i"),10)));
+}
+
+let detCur=null;
+function openDetail(day,i){
+  const sh=day.shifts[i], c=cnt(sh);
+  detCur={day:day,sh:sh};
+  $("detInternal").className=isStaff?"":"hide";
+  $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
+  $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
+    '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
+    '<div style="font-size:20px;font-weight:800;margin-top:4px">3cm '+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"</div>"+
+    ((isStaff&&sh.tel)?'<div style="margin-top:6px"><a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">'+sh.tel+" に発信</a></div>":"")+
+    (sh.exportedAt?'<div class="badge b-done" style="margin-top:8px">書き出し済 '+hhmm(sh.exportedAt)+"</div>":"")+
+    "</div>";
+  $("detScans").innerHTML=sh.scans.length?sh.scans.slice().reverse().map(x=>
+    '<div class="row"><span class="no num">'+fmt(x.no)+'</span><span class="tag tag'+x.size+'">'+x.size+
+    'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>").join(""):'<p class="note">なし</p>';
+  const dl=(day.dupLog||[]).filter(d=>d.bin===sh.bin);
+  $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
+    fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">検知 '+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
+  const xl=(day.delLog||[]).filter(d=>d.bin===sh.bin);
+  $("detDel").innerHTML=xl.length?xl.map(d=>'<div class="row del"><span style="flex:1"><b class="num">'+fmt(d.no)+"</b> "+
+    '<span class="tag tag'+d.size+'">'+d.size+'cm</span><br><span style="font-size:12px;color:#4A5B6B">'+d.kind+" "+hms(d.delTs)+
+    "　読取 "+hms(d.ts)+"</span></span></div>").join(""):'<p class="note">なし</p>';
+  closeSheets(); openSheet("shDetail");
+}
+$("detBack").onclick=()=>{ closeSheets(); openSheet("shAdmin"); };
+$("detSub").onclick=()=>{ if(detCur) exportSubmit(detCur.day,[detCur.sh]); };
+$("btnSubDay").onclick=()=>{ const day=dayByDate(admDate); if(day) exportSubmit(day,day.shifts); };
+$("btnSubNew").onclick=()=>{
+  const day=dayByDate(admDate); if(!day) return;
+  const list=day.shifts.filter(sh=>sh.closed&&!sh.exportedAt);
+  if(!list.length){ notify("未書き出しの便はありません",""); return; }
+  exportSubmit(day,list);
+};
+$("btnSubToday").onclick=()=>exportSubmit(S,S.shifts);
+
+$("btnExpNew").onclick=()=>{
+  const day=dayByDate(admDate); if(!day) return;
+  const list=day.shifts.filter(sh=>sh.closed&&!sh.exportedAt);
+  if(!list.length){ notify("未書き出しの便はありません",""); return; }
+  download("jet_"+day.date+"_new.csv",CSVHEAD+csvBody(day,list,false));
+  markExported(day,list);
+};
+$("btnExpDay").onclick=()=>{
+  if(!isStaff) return;
+  const day=dayByDate(admDate); if(!day||!day.shifts.length) return;
+  download("jet_"+day.date+".csv",CSVHEAD+csvBody(day,day.shifts,true));
+  markExported(day,day.shifts);
+};
+$("btnWipeToday").onclick=()=>{
+  if(!isStaff) return;
+  const n=S.shifts.length;
+  if(!n){ notify("消すデータがありません",""); return; }
+  ask({title:"本日のデータを全消去します",body:"便 "+n+"件と、その読取・記録がすべて消えます。\n元に戻せません。",okText:"消去する",danger:true,
+    onOk:()=>{ ask({title:"本当に消去しますか",body:"",okText:"消去を実行する",danger:true,
+      onOk:()=>{ S=blank(); save(); closeSheets(); showView(); notify("本日のデータを消去しました",""); }}); }});
+};
+$("btnExpAll").onclick=()=>{
+  if(!isStaff) return;
+  admArchive=readArchive();
+  let out=CSVHEAD;
+  admArchive.concat([S]).forEach(d=>{ out+=csvBody(d,d.shifts,true); d.shifts.forEach(sh=>sh.exportedAt=Date.now()); });
+  writeArchive(admArchive); save();
+  download("jet_all.csv",out); renderAdmin();
+};
+
+/* ---------- 画面を消さない ---------- */
+async function wake(){ try{ if("wakeLock" in navigator) await navigator.wakeLock.request("screen"); }catch(e){} }
+wake();
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") wake(); });
+window.addEventListener("beforeunload",save);
+
+showView(); render();
+</script>
+</body>
+</html>
