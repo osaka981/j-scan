@@ -206,7 +206,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <div class="bsub" id="hSub"></div>
     </div>
     <span class="bsub" id="syncDot" style="font-size:11px;white-space:nowrap"></span>
-    <button class="btn sm" id="btnCall">発信</button>
+    <button class="btn sm" id="btnCall" title="郵便局へ発信">局へ発信</button>
     <button class="btn sm dim" id="btnMenu">集計</button>
   </header>
 
@@ -301,6 +301,12 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <p class="note">列は 日付・便・ドライバー・サイズ・番号・読取時刻 のみです。便ごとに書き出す場合は、上の一覧から便を開いてください。</p>
 
   <div id="admInternal">
+    <h3>ドライバー画面の発信先（郵便局 大口窓口）</h3>
+    <div class="field"><label for="setPostName">名称</label><input id="setPostName" type="text" placeholder="大阪北郵便局 大口窓口"></div>
+    <div class="field"><label for="setPostTel">電話番号</label><input id="setPostTel" type="tel" inputmode="tel" placeholder="06-0000-0000"></div>
+    <button class="btn wide" id="btnSavePost">発信先を保存する</button>
+    <p class="note" id="setPostMsg">保存すると全端末のドライバー画面に反映されます。</p>
+
     <h3>本日のデータ</h3>
     <button class="btn wide danger" id="btnWipeToday">本日のデータを全消去する</button>
     <p class="note">テストで作った便を片付けるためのものです。本日の便・読取・記録がすべて消えます。過去日は消えません。</p>
@@ -441,6 +447,28 @@ function unlockAudio(){
 }
 document.addEventListener("touchstart",unlockAudio,{once:true});
 document.addEventListener("mousedown",unlockAudio,{once:true});
+
+/* ---------- 共有設定（発信先など。Firebase nikki/jet_settings） ---------- */
+const SETKEY="jet-settings-v1";
+let SET=(()=>{ try{ return JSON.parse(localStorage.getItem(SETKEY)||"{}"); }catch(e){ return {}; } })();
+async function loadSettings(){
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_settings.json"); const v=await r.json();
+    if(v&&typeof v==="object"){ SET=Object.assign({},SET,v); localStorage.setItem(SETKEY,JSON.stringify(SET)); }
+  }catch(e){}
+  paintCall();
+}
+async function saveSettings(patch){
+  Object.assign(SET,patch); localStorage.setItem(SETKEY,JSON.stringify(SET));
+  const r=await fetch(FB_URL+"/nikki/jet_settings.json",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch)});
+  return r.ok;
+}
+function paintCall(){
+  const b=$("btnCall"); if(!b) return;
+  b.disabled=!(SET.postTel||"").trim();
+  b.title=SET.postName?SET.postName+"へ発信":"郵便局へ発信";
+}
+loadSettings();
 
 /* ---------- ID照合（日報アプリの登録データ） ---------- */
 const FB_URL="https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -722,7 +750,7 @@ function render(){
   $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
   $("hBin").textContent=sh.bin;
   $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt);
-  $("btnCall").disabled=!sh.tel; paintSync();
+  paintCall(); paintSync();
   $("m3").className="mode"+(mode3?" on3":"");
   $("m5").className="mode"+(mode3?"":" on5");
   $("m3hint").textContent=mode3?"固定中":"切替";
@@ -793,7 +821,12 @@ $("btnDelAll").onclick=()=>{
           beep(300,200,.08); buzz([120,80,120]); }}); }});
   }
 };
-$("btnCall").onclick=()=>{ const t=cur().tel; if(t) location.href="tel:"+t.replace(/[^0-9+]/g,""); };
+$("btnCall").onclick=()=>{
+  const t=(SET.postTel||"").trim();
+  if(!t){ notify("発信先が未設定です","管理画面（社内）で郵便局の電話番号を設定してください。"); return; }
+  ask({title:(SET.postName||"郵便局")+" へ発信します",body:t,okText:"発信する",
+    onOk:()=>{ location.href="tel:"+t.replace(/[^0-9+]/g,""); }});
+};
 
 /* ---------- ロック ---------- */
 function paintLock(){
@@ -1029,6 +1062,7 @@ $("btnAdmin").onclick=()=>{
   openAdmin();
 };
 function openAdmin(){
+  $("setPostName").value=SET.postName||""; $("setPostTel").value=SET.postTel||"";
   admArchive=readArchive();
   const days=Array.from(new Set(admArchive.map(d=>d.date).filter(d=>d!==S.date))).concat([S.date]).reverse();
   admDate=admDate&&days.includes(admDate)?admDate:S.date;
@@ -1070,7 +1104,8 @@ function renderAdmin(){
                        :'<span class="badge b-open">計数中</span>';
     return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+sh.bin+"　"+(sh.driver||"")+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
-      (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
+      (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+
+      ((isStaff&&sh.tel)?'　<a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'" onclick="event.stopPropagation()">'+sh.tel+" に発信</a>":"")+"</div>"+bad+
       '</div><div class="qty num">'+(c.a+c.b)+"</div></div>";
   }).join(""):'<p class="note">便がありません</p>')+
     (ends.length?'<div class="lhead" style="margin-top:10px">業務終了</div>'+ends.map(e=>
@@ -1119,6 +1154,14 @@ $("btnExpDay").onclick=()=>{
   const day=dayByDate(admDate); if(!day||!day.shifts.length) return;
   download("jet_"+day.date+".csv",CSVHEAD+csvBody(day,day.shifts,true));
   markExported(day,day.shifts);
+};
+$("btnSavePost").onclick=async()=>{
+  if(!isStaff) return;
+  const name=$("setPostName").value.trim(), tel=$("setPostTel").value.trim();
+  const ok=await saveSettings({postName:name,postTel:tel});
+  $("setPostMsg").textContent=ok?"保存しました（全端末に反映されます）":"端末には保存しましたが、共有への保存に失敗しました。電波を確認して再度保存してください";
+  $("setPostMsg").style.color=ok?"#1D6B45":"#A8231C";
+  paintCall();
 };
 $("btnWipeToday").onclick=()=>{
   if(!isStaff) return;
