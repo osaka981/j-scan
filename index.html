@@ -43,6 +43,7 @@ header .bsub{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidde
 .btn.dim{color:var(--ink-2);font-weight:500}
 .btn.wide{width:100%;margin-top:8px}
 .btn.go{background:var(--blue-bg);border-color:#8FB4D8;color:var(--blue);font-size:18px;padding:16px}
+.btn.photo{background:var(--amber-bg);border-color:#DDBE93;color:var(--amber);font-size:16px;padding:14px}
 .btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 .btn[disabled]{opacity:.45}
 
@@ -192,6 +193,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <button class="btn wide dim hide" id="btnOther">別のドライバーで始める</button>
     <div class="prev" id="startPrev"></div>
   </div>
+  <button class="btn wide photo" id="btnPhoto">回収資料の写真提出</button>
   <button class="btn wide dim" id="btnSumFromStart">本日の集計を見る</button>
   <button class="btn wide hide" id="btnResume">計数中の便に戻る</button>
   <button class="btn wide" id="btnFinish">業務終了</button>
@@ -316,6 +318,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <button class="btn wide dim" id="btnExpAll">全期間を書き出す</button>
     <p class="note">二度読みの検知や電話番号まで含みます。先方に渡すものではありません。</p>
   </div>
+  <button class="btn wide dim" id="btnAdmLogout">管理画面からログアウト</button>
   <button class="btn wide dim" data-close>閉じる</button>
 </div>
 
@@ -333,6 +336,17 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   </div>
   <button class="btn wide" id="detSub">この便の提出用CSVを書き出す</button>
   <button class="btn wide dim" id="detBack">一覧に戻る</button>
+</div>
+
+<!-- 回収資料の写真提出 -->
+<div class="sheet" id="shPhoto">
+  <h2>回収資料の写真提出</h2>
+  <div class="field"><label for="phShift">どの便の資料ですか</label><select class="day" id="phShift"></select></div>
+  <div id="phList"><p class="note">写真なし</p></div>
+  <input type="file" id="phFile" accept="image/*" capture="environment" class="hide">
+  <button class="btn wide photo" id="phTake">撮影して提出する</button>
+  <p class="note">差出票など、郵便局で受け取った書類を撮影してください。提出した写真は弊社の管理システムで確認します。</p>
+  <button class="btn wide dim" data-close>閉じる</button>
 </div>
 
 <div class="sheet" id="shSum">
@@ -356,6 +370,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 
   <h3>データ</h3>
   <button class="btn wide" id="btnSubToday">提出用CSV（本日の全便）</button>
+  <button class="btn wide danger hide" id="btnCancelShift">この便を取り消して開始画面へ戻る</button>
+  <p class="note hide" id="cancelNote">IDやドライバーを間違えて始めたときに使います。読取があれば削除の記録に残ります。</p>
   <button class="btn wide" id="btnNewShift">次の便を始める</button>
   <button class="btn wide dim" data-close>閉じる</button>
 </div>
@@ -906,8 +922,28 @@ $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締め
 
 /* ---------- 集計 ---------- */
 let sumWho=null;   // null=全員 / それ以外は driverId または氏名
+async function fbDeleteShift(day,sh){
+  try{ await fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+shiftKey(sh)+".json",{method:"DELETE"}); }catch(e){}
+}
+$("btnCancelShift").onclick=()=>{
+  if(!inScan()) return;
+  const sh=cur(), n=sh.scans.length;
+  ask({title:sh.bin+"（"+sh.driver+"）を取り消します",
+    body:(n?"読取 "+n+"件は削除の記録に残ります。\n":"")+"この便は記録から消え、開始画面に戻ります。",
+    okText:"取り消す",danger:true,
+    onOk:()=>{
+      if(n) removeScans(sh.scans.slice(),"便取消");
+      S.shifts=S.shifts.filter(x=>x!==sh); S.active=-1; save();
+      fbDeleteShift(S,sh);
+      closeSheets(); showView();
+      $("btnOther").click();
+      notify("便を取り消しました","IDから入力し直してください。");
+    }});
+};
 function driverKeyOf(sh){ return sh.driverId?normId(sh.driverId):(sh.driver||""); }
 function openSummary(){
+  $("btnCancelShift").className="btn wide danger"+(inScan()?"":" hide");
+  $("cancelNote").className="note"+(inScan()?"":" hide");
   const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
   // ドライバー選択：既定は開始画面に入っている人（無ければ最後の便の人）
   const people=[]; S.shifts.forEach(sh=>{ const k=driverKeyOf(sh); if(k&&!people.some(p=>p.k===k)) people.push({k:k,n:sh.driver||k}); });
@@ -1070,6 +1106,16 @@ function openAdmin(){
   renderAdmin(); openSheet("shAdmin");
 }
 $("admDay").onchange=()=>{ admDate=$("admDay").value; renderAdmin(); };
+$("btnAdmLogout").onclick=()=>{ adminOK=false; isStaff=false; closeSheets(); notify("ログアウトしました","次回は暗証番号の入力から始まります。"); };
+// 管理画面は操作が15分止まったら自動ログアウト（共用端末で開きっぱなし対策）
+let admLast=Date.now();
+["pointerdown","keydown","touchstart"].forEach(ev=>document.addEventListener(ev,()=>{ admLast=Date.now(); },{passive:true}));
+setInterval(()=>{
+  if(adminOK && Date.now()-admLast>15*60*1000){
+    adminOK=false; isStaff=false;
+    if($("shAdmin").classList.contains("on")||$("shDetail").classList.contains("on")) closeSheets();
+  }
+},30000);
 
 function corpBreakdown(day){
   const m=new Map();
@@ -1114,6 +1160,75 @@ function renderAdmin(){
 }
 
 let detCur=null;
+function shrinkImage(file,longEdge,quality){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>reject(new Error("読み込み失敗"));
+    fr.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error("画像を開けません"));
+      img.onload=()=>{
+        let w=img.width,h=img.height; const sc=Math.min(1,longEdge/Math.max(w,h));
+        w=Math.round(w*sc); h=Math.round(h*sc);
+        const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+        const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL("image/jpeg",quality));
+      };
+      img.src=fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+let phSh=null, phPhotos={};
+function photoPathFor(day,sh){ return FB_URL+"/nikki/jet_photos/"+day.date+"/"+shiftKey(sh); }
+function openPhotoSheet(){
+  if(!S.shifts.length){ notify("便がありません","便を始めて締めてから提出してください。"); return; }
+  // 対象は今日の便。開始画面に入っている人の便を優先し、直近の締め済み便を初期選択
+  const curId=normId($("sId").value), curNm=($("sDrv").value||"").trim();
+  let list=S.shifts.filter(sh=>(curId&&sh.driverId&&normId(sh.driverId)===curId)||(!curId&&curNm&&sh.driver===curNm));
+  if(!list.length) list=S.shifts.slice();
+  const closed=list.filter(sh=>sh.closed);
+  phSh=(closed.length?closed[closed.length-1]:list[list.length-1]);
+  const sel=$("phShift");
+  sel.innerHTML=list.map(sh=>'<option value="'+sh.id+'"'+(sh===phSh?" selected":"")+">"+sh.bin+"　"+(sh.driver||"")+(sh.closed?"（締め "+hhmm(sh.closedAt)+"）":"（計数中）")+"</option>").join("");
+  sel.onchange=()=>{ phSh=S.shifts.find(sh=>String(sh.id)===sel.value)||phSh; loadPhPhotos(); };
+  openSheet("shPhoto"); loadPhPhotos();
+}
+async function loadPhPhotos(){
+  phPhotos={}; $("phList").innerHTML='<p class="note">読み込み中</p>';
+  try{ const r=await fetch(photoPathFor(S,phSh)+".json"); const v=await r.json(); if(v&&typeof v==="object") phPhotos=v; }catch(e){}
+  paintPhPhotos();
+}
+function paintPhPhotos(){
+  const el=$("phList"); const keys=Object.keys(phPhotos).sort();
+  el.innerHTML=keys.length?'<div class="chips">'+keys.map(k=>
+    '<span class="chip" style="padding:4px"><img src="'+(phPhotos[k].thumb||"")+'" style="height:72px;border-radius:4px;display:block">'+
+    '<button data-ph="'+k+'" style="color:#A8231C;font-weight:700">×</button></span>').join("")+"</div>"+
+    '<p class="note">'+keys.length+"枚 提出済み</p>":'<p class="note">写真なし</p>';
+  el.querySelectorAll("[data-ph]").forEach(b=>b.onclick=()=>{
+    const k=b.getAttribute("data-ph");
+    ask({title:"この写真を取り消します",body:"",okText:"取り消す",danger:true,onOk:async()=>{
+      try{ await fetch(photoPathFor(S,phSh)+"/"+k+".json",{method:"DELETE"}); }catch(e){}
+      delete phPhotos[k]; paintPhPhotos();
+    }});
+  });
+}
+$("btnPhoto").onclick=openPhotoSheet;
+$("phTake").onclick=()=>$("phFile").click();
+$("phFile").onchange=async e=>{
+  const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f||!phSh) return;
+  $("phTake").disabled=true; $("phTake").textContent="保存中";
+  try{
+    const full=await shrinkImage(f,1400,.62), thumb=await shrinkImage(f,240,.6);
+    const id="p"+Date.now();
+    const body={full:full,thumb:thumb,at:Date.now(),by:"driver",bin:phSh.bin,driver:phSh.driver||"",driverId:phSh.driverId||""};
+    const r=await fetch(photoPathFor(S,phSh)+"/"+id+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error("save");
+    phPhotos[id]={thumb:thumb,at:body.at}; paintPhPhotos(); beep(880,80,.05);
+    notify("提出しました",phSh.bin+" の資料として保存しました。");
+  }catch(err){ notify("保存できませんでした","電波を確認して、もう一度撮影してください。"); }
+  $("phTake").disabled=false; $("phTake").textContent="撮影して提出する";
+};
 function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
   detCur={day:day,sh:sh};
