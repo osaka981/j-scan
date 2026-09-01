@@ -210,6 +210,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <span class="bsub" id="syncDot" style="font-size:11px;white-space:nowrap"></span>
     <button class="btn sm" id="btnCall" title="郵便局へ発信">局へ発信</button>
     <button class="btn sm dim" id="btnMenu">集計</button>
+    <button class="btn sm dim" id="btnLogout">ログアウト</button>
   </header>
 
   <div class="counts">
@@ -351,6 +352,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 
 <div class="sheet" id="shSum">
   <h2>本日の集計</h2>
+  <button class="btn wide" id="btnCallSum">局へ発信</button>
   <div class="field"><select class="day" id="sumWho"></select></div>
   <table id="sumTable"><thead><tr><th>便 / ドライバー</th><th>3cm</th><th>5cm</th><th>合計</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
   <p class="note" id="sumNote"></p>
@@ -837,6 +839,13 @@ $("btnDelAll").onclick=()=>{
           beep(300,200,.08); buzz([120,80,120]); }}); }});
   }
 };
+function callPost(){
+  const t=(SET.postTel||"").trim();
+  if(!t){ notify("発信先が未設定です","管理画面（社内）で郵便局の電話番号を設定してください。"); return; }
+  ask({title:(SET.postName||"郵便局")+" へ発信します",body:t,okText:"発信する",
+    onOk:()=>{ location.href="tel:"+t.replace(/[^0-9+]/g,""); }});
+}
+$("btnCallSum").onclick=callPost;
 $("btnCall").onclick=()=>{
   const t=(SET.postTel||"").trim();
   if(!t){ notify("発信先が未設定です","管理画面（社内）で郵便局の電話番号を設定してください。"); return; }
@@ -909,13 +918,32 @@ $("btnManual").onclick=()=>{ $("inNo").value=""; openSheet("shManual"); setTimeo
 $("btnMan3").onclick=()=>{ const v=$("inNo").value; mode3=true; closeSheets(); handle(v); };
 $("btnMan5").onclick=()=>{ const v=$("inNo").value; mode3=false; closeSheets(); handle(v); };
 $("btnMenu").onclick=openSummary;
+// 計数画面のログアウト：読取が1件でもあれば不可（締めるで確定させる）
+$("btnLogout").onclick=()=>{
+  if(!inScan()) return;
+  const sh=cur();
+  if(sh.scans.length){
+    notify("ログアウトできません","読取が "+sh.scans.length+"件あります。\n「締める」で便を確定してください。\n誤ってIDを入力した場合は、集計の「この便を取り消す」から取り消せます。");
+    return;
+  }
+  ask({title:"ログアウトします",body:sh.bin+"（"+sh.driver+"）は読取がないため記録に残りません。",okText:"ログアウト",
+    onOk:()=>{
+      S.shifts=S.shifts.filter(x=>x!==sh); S.active=-1; save();
+      fbDeleteShift(S,sh);
+      showView(); $("btnOther").click();
+    }});
+};
 
 $("btnClose").onclick=()=>{
   const sh=cur();
   if(!sh.scans.length){ setBand("warn","読取が0件です","","締める前に読み取ってください"); return; }
   const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
+  const dest=(SET.postName||"").trim()||"郵便局";
   ask({title:sh.bin+"（"+sh.driver+"）を締めます",
-    body:"3cm "+a+"個　5cm "+b+"個　計 "+(a+b)+"個\n締め時刻 "+hhmm(Date.now()),okText:"締める",
+    body:"3cm "+a+"個　5cm "+b+"個　計 "+(a+b)+"個\n締め時刻 "+hhmm(Date.now())+
+         "\n\n"+dest+"に電話を入れてから向かってください。"+((SET.postTel||"").trim()?"\n"+SET.postTel:"")+
+         "\n締めた後の画面にある「局へ発信」から掛けられます。",
+    okText:"締める",
     onOk:()=>{ sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0); beep(880,120,.06); openSummary(); showView(); }});
 };
 $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
@@ -942,6 +970,7 @@ $("btnCancelShift").onclick=()=>{
 };
 function driverKeyOf(sh){ return sh.driverId?normId(sh.driverId):(sh.driver||""); }
 function openSummary(){
+  $("btnCallSum").textContent=(SET.postName||"郵便局")+"へ発信"; $("btnCallSum").disabled=!(SET.postTel||"").trim();
   $("btnCancelShift").className="btn wide danger"+(inScan()?"":" hide");
   $("cancelNote").className="note"+(inScan()?"":" hide");
   const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
