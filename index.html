@@ -183,7 +183,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <div id="vStart">
   <div class="panel">
     <h1>集荷を始める</h1>
-    <div class="field"><label for="sId">ID</label><input id="sId" type="tel" inputmode="numeric" autocomplete="off" placeholder="社員番号（例 5086 / 10001-001）"></div>
+    <div class="field"><label for="sId">ID</label><input id="sId" type="tel" inputmode="numeric" autocomplete="off">
+      <div class="note" id="sIdMsg" style="margin-top:4px"></div></div>
     <div class="field"><label for="sBin">便名</label><input id="sBin" type="text" placeholder="第1便"></div>
     <div class="field"><label for="sDrv">ドライバー名</label><input id="sDrv" type="text" placeholder="氏名"></div>
     <div class="field"><label for="sTel">電話番号</label><input id="sTel" type="tel" inputmode="tel" placeholder="090-0000-0000"></div>
@@ -203,6 +204,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <div class="bname" id="hBin">第1便</div>
       <div class="bsub" id="hSub"></div>
     </div>
+    <span class="bsub" id="syncDot" style="font-size:11px;white-space:nowrap"></span>
     <button class="btn sm" id="btnCall">発信</button>
     <button class="btn sm dim" id="btnMenu">集計</button>
   </header>
@@ -438,6 +440,123 @@ function unlockAudio(){
 document.addEventListener("touchstart",unlockAudio,{once:true});
 document.addEventListener("mousedown",unlockAudio,{once:true});
 
+/* ---------- ID照合（日報アプリの登録データ） ---------- */
+const FB_URL="https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app";
+const MKEY="jet-master-v1";
+let MASTER=null;   // {drivers:[], companies:[], at}
+function asArr(v){ return Array.isArray(v)?v.filter(Boolean):(v?Object.values(v).filter(Boolean):[]); }
+async function loadMaster(force){
+  if(!force){ try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c&&Date.now()-c.at<6*3600*1000){ MASTER=c; return c; } }catch(e){} }
+  try{
+    const [d,c]=await Promise.all([
+      fetch(FB_URL+"/nikki/drivers.json").then(r=>r.json()),
+      fetch(FB_URL+"/nikki/companies.json").then(r=>r.json())
+    ]);
+    MASTER={drivers:asArr(d).map(x=>({id:String(x.id||""),empNo:String(x.empNo||""),driverNo:String(x.driverNo||""),
+      name:x.name||"",tel:x.tel||"",company:x.company||""})),
+      companies:asArr(c).map(x=>({code:String(x.companyCode||""),name:x.name||"",owner:String(x.ownerLoginId||"")})),at:Date.now()};
+    try{ localStorage.setItem(MKEY,JSON.stringify(MASTER)); }catch(e){}
+    return MASTER;
+  }catch(e){
+    try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c){ MASTER=c; return c; } }catch(e2){}
+    return null;
+  }
+}
+// 10001001 → 10001-001 のように区切りを補う
+function canonId(id){
+  let t=normId(id);
+  const m=t.match(/^(\d{5})(\d{3})$/); if(m) t=m[1]+"-"+m[2];
+  return t;
+}
+function findDriver(id){
+  if(!MASTER) return null;
+  const t=canonId(id), plain=t.replace("-","");
+  return MASTER.drivers.find(d=>[d.id,d.empNo,d.driverNo].some(v=>v&&(v===t||v.replace("-","")===plain)))||null;
+}
+function findCompany(id){
+  if(!MASTER) return null;
+  const t=normId(id);
+  return MASTER.companies.find(c=>c.code&&(c.code===t||c.owner===t||("9"+c.code)===t))||null;
+}
+let idState={kind:"",name:""};   // kind: driver / company / none
+async function resolveId(){
+  const raw=$("sId").value; const msg=$("sIdMsg");
+  idState={kind:"",name:""};
+  if(!normId(raw)){ msg.textContent=""; return; }
+  if(!MASTER){ msg.textContent="登録データを読み込み中"; await loadMaster(false); }
+  const d=findDriver(raw);
+  if(d){
+    $("sDrv").value=d.name; if(d.tel) $("sTel").value=d.tel;
+    $("sId").value=canonId(raw);
+    idState={kind:"driver",name:d.name};
+    msg.textContent="登録済み："+d.name+(d.company?"（"+d.company+"）":""); msg.style.color="#1D6B45"; return;
+  }
+  const c=findCompany(raw);
+  if(c){
+    idState={kind:"company",name:c.name};
+    msg.textContent=c.name+"：未登録のドライバーです。氏名と電話番号を入力してください"; msg.style.color="#7A5A00";
+    setTimeout(()=>$("sDrv").focus(),50); return;
+  }
+  if(!MASTER){ msg.textContent="登録データを取得できません。氏名を手入力して続行できます"; msg.style.color="#7A5A00"; return; }
+  msg.textContent="登録がないIDです。氏名を手入力して続行できます"; msg.style.color="#A8231C";
+}
+$("sId").addEventListener("change",resolveId);
+$("sId").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("sId").blur(); } });
+loadMaster(false);
+
+/* ---------- Firebase 同期（便の実績を nikki/jet_scan へ） ---------- */
+const DEVKEY="jet-device-id";
+let DEVICE=localStorage.getItem(DEVKEY);
+if(!DEVICE){ DEVICE="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); localStorage.setItem(DEVKEY,DEVICE); }
+const shiftKey=sh=>DEVICE+"_"+sh.id;
+function shiftPayload(day,sh){
+  const c=cnt(sh);
+  return {
+    key:shiftKey(sh), date:day.date, device:DEVICE,
+    bin:sh.bin, binNo:binNo(day,sh),
+    driverId:sh.driverId||"", driverName:sh.driver||"", tel:sh.tel||"",
+    corp:sh.corp||"", corpName:corpName(sh.corp), registered:sh.registered!==false,
+    startedAt:sh.startedAt||null, closedAt:sh.closedAt||null, closed:!!sh.closed,
+    c3:c.a, c5:c.b, total:c.a+c.b,
+    scans:sh.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})),
+    dupCount:(day.dupLog||[]).filter(d=>d.bin===sh.bin).length,
+    delCount:(day.delLog||[]).filter(d=>d.bin===sh.bin).length,
+    exportedAt:sh.exportedAt||null,
+    updatedAt:Date.now()
+  };
+}
+let syncBusy=false, syncTimer=null;
+function markDirty(sh){ if(sh){ sh._dirty=Date.now(); } scheduleSync(800); }
+function scheduleSync(ms){ clearTimeout(syncTimer); syncTimer=setTimeout(syncNow,ms||0); }
+async function syncNow(){
+  if(syncBusy||!navigator.onLine){ paintSync(); return; }
+  const list=S.shifts.filter(sh=>sh._dirty&&(!sh._synced||sh._dirty>sh._synced));
+  if(!list.length){ paintSync(); return; }
+  syncBusy=true; paintSync();
+  for(const sh of list){
+    const stamp=sh._dirty;
+    try{
+      const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+"/"+shiftKey(sh)+".json",
+        {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(shiftPayload(S,sh))});
+      if(r.ok){ sh._synced=stamp; }
+    }catch(e){ break; }
+  }
+  save(); syncBusy=false; paintSync();
+  if(S.shifts.some(sh=>sh._dirty&&(!sh._synced||sh._dirty>sh._synced))) scheduleSync(15000);
+}
+function paintSync(){
+  const el=$("syncDot"); if(!el) return;
+  const pend=S.shifts.filter(sh=>sh._dirty&&(!sh._synced||sh._dirty>sh._synced)).length;
+  if(syncBusy){ el.textContent="同期中"; el.style.color="#4A5B6B"; }
+  else if(!navigator.onLine){ el.textContent="オフライン"; el.style.color="#A8231C"; }
+  else if(pend){ el.textContent="未同期 "+pend; el.style.color="#7A5A00"; }
+  else { el.textContent="同期済"; el.style.color="#1D6B45"; }
+}
+window.addEventListener("online",()=>scheduleSync(300));
+window.addEventListener("offline",paintSync);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") scheduleSync(300); });
+setInterval(()=>{ scheduleSync(0); },60000);
+
 /* ---------- 確認ダイアログ ---------- */
 let askOpen=false, askOnOk=null;
 function ask(o){
@@ -477,7 +596,7 @@ function handle(raw){
 function commit(no){
   const size=mode3?3:5;
   cur().scans.push({no:no,size:size,ts:Date.now()});
-  save();
+  save(); markDirty(cur());
   setBand("ok",size+"cm で登録",fmt(no),"この便 "+cur().scans.length+"件");
   beep(size===5?1180:900,size===5?110:60,.06);
   buzz(size===5?[40,40,40]:25);
@@ -521,7 +640,7 @@ function prepStart(){
   $("sBin").value="第"+(S.shifts.length+1)+"便";
   $("sDrv").value=last?last.driver:"";
   $("sTel").value=last?last.tel:"";
-  $("sId").value="";
+  $("sId").value=""; $("sIdMsg").textContent=""; idState={kind:"",name:""};
   let html="";
   if(last&&last.closed){
     const a=last.scans.filter(x=>x.size===3).length,b=last.scans.filter(x=>x.size===5).length;
@@ -561,9 +680,11 @@ $("btnStart").onclick=()=>{
   const drv=$("sDrv").value.trim();
   if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
   S.shifts.push({id:Date.now(),bin:$("sBin").value.trim()||("第"+(S.shifts.length+1)+"便"),
-    driver:drv,tel:$("sTel").value.trim(),driverId:id,corp:corpFromId(id),
+    driver:drv,tel:$("sTel").value.trim(),driverId:canonId(id),corp:corpFromId(id),
+    registered:idState.kind==="driver",
     startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
   S.active=S.shifts.length-1; save();
+  markDirty(cur());
   mode3=true; selMode=false; sel.clear();
   setBand("",cur().bin+" 開始 "+hhmm(cur().startedAt),"","読取待ち");
   showView(); render();
@@ -579,7 +700,7 @@ function render(){
   $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
   $("hBin").textContent=sh.bin;
   $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt);
-  $("btnCall").disabled=!sh.tel;
+  $("btnCall").disabled=!sh.tel; paintSync();
   $("m3").className="mode"+(mode3?" on3":"");
   $("m5").className="mode"+(mode3?"":" on5");
   $("m3hint").textContent=mode3?"固定中":"切替";
@@ -627,7 +748,7 @@ function removeScans(items,kind){
   const nos=new Set(items.map(x=>x.no));
   items.forEach(x=>S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:kind}));
   sh.scans=sh.scans.filter(x=>!nos.has(x.no));
-  sel.clear(); save(); render();
+  sel.clear(); save(); markDirty(sh); render();
 }
 $("btnSel").onclick=()=>{ selMode=!selMode; sel.clear(); render(); };
 $("btnDelAll").onclick=()=>{
@@ -724,7 +845,7 @@ $("btnClose").onclick=()=>{
   const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
   ask({title:sh.bin+"（"+sh.driver+"）を締めます",
     body:"3cm "+a+"個　5cm "+b+"個　計 "+(a+b)+"個\n締め時刻 "+hhmm(Date.now()),okText:"締める",
-    onOk:()=>{ sh.closed=true; sh.closedAt=Date.now(); save(); beep(880,120,.06); openSummary(); showView(); }});
+    onOk:()=>{ sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0); beep(880,120,.06); openSummary(); showView(); }});
 };
 $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
 
@@ -825,6 +946,8 @@ const corpName=c=>CORPS[String(c||"").trim()]||(c?"未登録("+c+")":"未入力"
 function corpFromId(id){
   const t=String(id||"").replace(/[－ー–—]/g,"-").trim();
   if(!t) return "";
+  const d=(typeof findDriver==="function")?findDriver(t):null;
+  if(d&&d.company){ if(/大阪急配/.test(d.company)) return "1"; if(/UP/i.test(d.company)) return "2"; return "9"; }
   if(/^10001(-|$)/.test(t)) return "2";
   if(/^\d{4,5}$/.test(t)) return "1";
   return "9";
@@ -849,8 +972,8 @@ function dayByDate(d){ if(d===S.date) return S; return admArchive.find(x=>x.date
 function persistDay(day){ if(day===S){ save(); } else { writeArchive(admArchive); } }
 function markExported(day,shifts){
   const now=Date.now();
-  shifts.forEach(sh=>{ sh.exportedAt=now; });
-  persistDay(day); if(day===S) save();
+  shifts.forEach(sh=>{ sh.exportedAt=now; if(day===S) sh._dirty=now; });
+  persistDay(day); if(day===S){ save(); scheduleSync(500); }
   if($("shAdmin").classList.contains("on")) renderAdmin();
 }
 const cnt=sh=>({a:sh.scans.filter(x=>x.size===3).length,b:sh.scans.filter(x=>x.size===5).length});
@@ -911,7 +1034,7 @@ function renderAdmin(){
                        :'<span class="badge b-open">計数中</span>';
     return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+sh.bin+"　"+(sh.driver||"")+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
-      (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:""):"")+((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
+      (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
       '</div><div class="qty num">'+(c.a+c.b)+"</div></div>";
   }).join(""):'<p class="note">便がありません</p>')+
     (ends.length?'<div class="lhead" style="margin-top:10px">業務終了</div>'+ends.map(e=>
@@ -984,7 +1107,7 @@ wake();
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") wake(); });
 window.addEventListener("beforeunload",save);
 
-showView(); render();
+showView(); render(); scheduleSync(1500);
 </script>
 </body>
 </html>
