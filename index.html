@@ -146,6 +146,12 @@ footer .btn{flex:1}
 .actbar{display:flex;gap:8px;margin:0 0 10px}
 .actbar .btn{flex:1;padding:12px 10px;font-size:15px}
 .btn.primary{background:var(--blue-bg);border-color:#8FB4D8;color:var(--blue)}
+.tabs{display:flex;gap:6px;margin:0 0 8px}
+.tabs button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink-2);font-weight:700;font-size:14px;
+  border-radius:8px;padding:9px 6px;font-family:inherit;cursor:pointer}
+.tabs button.on3{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.tabs button.on5{border-color:var(--amber);background:var(--amber-bg);color:var(--amber)}
+.tabs button.onall{border-color:var(--ink);background:#E6EBF1;color:var(--ink)}
 .search{width:100%;padding:11px 12px;font-size:17px;font-family:inherit;color:var(--ink);border:1px solid var(--line);border-radius:8px;background:var(--card);margin-bottom:8px}
 .sheet h2{font-size:17px;margin:0 0 10px}
 .sheet h3{font-size:13px;color:var(--ink-2);margin:16px 0 6px}
@@ -355,18 +361,25 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <!-- 便の明細 -->
 <div class="sheet full" id="shDetail">
   <h2 id="detTitle">便の明細</h2>
-  <div class="actbar">
-    <button class="btn dim" id="detBack">一覧に戻る</button>
-    <button class="btn primary" id="detSub">提出用CSVを書き出す</button>
-  </div>
   <div id="detMeta"></div>
+  <div class="actbar">
+    <button class="btn primary" id="detSub">CSV書き出し</button>
+    <button class="btn dim" id="detBack">一覧に戻る</button>
+  </div>
   <h3>読取</h3>
+  <div class="tabs" id="detTabs">
+    <button data-size="all" class="onall">全部</button>
+    <button data-size="3">3cm</button>
+    <button data-size="5">5cm</button>
+  </div>
   <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
   <div id="detScans"></div>
   <div id="detInternal">
+    <div id="detDelWrap">
     <h3>この便の削除</h3>
     <button class="btn wide danger" id="detDelete">この便を削除する</button>
     <p class="note">便と読取がすべて消え、計上からも外れます。削除の記録には残ります。</p>
+    </div>
 
     <h3>二度読みの記録</h3>
     <div id="detDup"></div>
@@ -604,6 +617,7 @@ function sameDriver(sh,id,name){
 }
 function nextBinFor(id,name){ return "第"+(S.shifts.filter(sh=>sameDriver(sh,id,name)).length+1)+"便"; }
 const isAutoBin=v=>/^第\d+便$/.test((v||"").trim())||!(v||"").trim();
+const tidyBin=v=>{ const t=(v||"").trim(); return /^\d+$/.test(t)?"第"+t+"便":t; };
 function shiftPayload(day,sh){
   const c=cnt(sh);
   return {
@@ -792,7 +806,7 @@ $("btnStart").onclick=()=>{
   const drv=$("sDrv").value.trim();
   if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
   const binIn=$("sBin").value.trim();
-  S.shifts.push({id:Date.now(),bin:isAutoBin(binIn)?nextBinFor(id,drv):binIn,
+  S.shifts.push({id:Date.now(),bin:isAutoBin(binIn)?nextBinFor(id,drv):tidyBin(binIn),
     driver:drv,tel:$("sTel").value.trim(),driverId:canonId(id),corp:corpFromId(id),
     registered:idState.kind==="driver",
     startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
@@ -1223,13 +1237,13 @@ function renderAdmin(){
   day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; if(sh.closed&&!sh.exportedAt) todo++; });
   $("admSummary").innerHTML='<div class="alertbox sumcard" id="sumCard" style="background:#FFF;border-color:#B9C7D6">'+
     '<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;color:#4A5B6B;font-weight:600">'+admDate+' の合計</div>'+
-    '<div style="font-size:12px;color:var(--blue);font-weight:700">タップで提出用CSV ›</div></div>'+
+    '<div style="font-size:12px;color:var(--blue);font-weight:700">タップで全便の番号一覧 ›</div></div>'+
     '<div style="font-size:30px;font-weight:800;margin-top:2px">'+(t3+t5)+'<span style="font-size:15px;font-weight:600"> 個</span></div>'+
     '<div style="font-size:14px;margin-top:2px">3cm '+t3+"　5cm "+t5+"　便数 "+day.shifts.length+"</div>"+
     (todo?'<div class="badge b-todo" style="margin-top:8px">未書き出し '+todo+"便</div>":'<div class="badge b-done" style="margin-top:8px">書き出し済み</div>')+
     (isStaff?corpBreakdown(day):"")+
     "</div>";
-  $("sumCard").onclick=()=>exportSubmit(day,day.shifts);
+  $("sumCard").onclick=()=>openDayDetail(day);
 
   const ends=isStaff?(day.ends||[]):[];
   $("admList").innerHTML=(day.shifts.length?day.shifts.map((sh,i)=>{
@@ -1249,18 +1263,30 @@ function renderAdmin(){
 }
 
 let detCur=null;
+let detSize="all";
+function detAllScans(){
+  if(!detCur) return [];
+  if(detCur.all) return detCur.day.shifts.flatMap(sh=>sh.scans.map(x=>Object.assign({},x,{_bin:sh.bin,_drv:sh.driver||""})));
+  return detCur.sh.scans;
+}
 function paintDetScans(){
   if(!detCur) return;
-  const sh=detCur.sh, q=digitsOf($("detSearch").value);
-  const src=q?sh.scans.filter(x=>x.no.includes(q)):sh.scans;
-  $("detScans").innerHTML=sh.scans.length
-    ?(src.length?src.slice().reverse().map(x=>
-      '<div class="row"><span class="no num">'+fmt(x.no)+'</span><span class="tag tag'+x.size+'">'+x.size+
-      'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>").join("")+
-      '<p class="note">'+(q?src.length+"件 該当 / ":"")+sh.scans.length+"件</p>"
-      :'<p class="note">「'+q+'」を含む番号はありません</p>')
+  const all=detAllScans(), q=digitsOf($("detSearch").value);
+  let src=detSize==="all"?all:all.filter(x=>String(x.size)===detSize);
+  if(q) src=src.filter(x=>x.no.includes(q));
+  $("detTabs").querySelectorAll("button").forEach(b=>{
+    const v=b.getAttribute("data-size"); b.className=v===detSize?(v==="all"?"onall":"on"+v):"";
+  });
+  const sorted=src.slice().sort((a,b)=>(a.ts||0)-(b.ts||0)).reverse();
+  $("detScans").innerHTML=all.length
+    ?(sorted.length?sorted.map(x=>
+      '<div class="row"><span class="no num">'+fmt(x.no)+(detCur.all?'<div style="font-size:11px;color:#4A5B6B;font-weight:500">'+x._bin+"　"+x._drv+"</div>":"")+'</span>'+
+      '<span class="tag tag'+x.size+'">'+x.size+'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>").join("")+
+      '<p class="note">'+sorted.length+"件"+(detSize!=="all"||q?" 該当 / 全 "+all.length+"件":"")+"</p>"
+      :'<p class="note">該当する番号はありません</p>')
     :'<p class="note">なし</p>';
 }
+$("detTabs").querySelectorAll("button").forEach(b=>b.onclick=()=>{ detSize=b.getAttribute("data-size"); paintDetScans(); });
 $("detSearch").addEventListener("input",paintDetScans);
 $("detSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("detSearch").blur(); } });
 function shrinkImage(file,longEdge,quality){
@@ -1332,10 +1358,31 @@ $("phFile").onchange=async e=>{
   }catch(err){ notify("保存できませんでした","電波を確認して、もう一度撮影してください。"); }
   $("phTake").disabled=false; $("phTake").textContent="撮影して提出する";
 };
+function openDayDetail(day){
+  detCur={day:day,sh:null,all:true}; detSize="all";
+  $("detInternal").className=isStaff?"":"hide";
+  $("detDelWrap").className="hide";
+  let t3=0,t5=0; day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; });
+  $("detTitle").textContent=day.date+"　全便";
+  $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
+    '<div style="font-size:20px;font-weight:800">3cm '+t3+"　5cm "+t5+"　計 "+(t3+t5)+"</div>"+
+    '<div style="font-size:14px;margin-top:4px">便数 '+day.shifts.length+"</div>"+
+    day.shifts.map(sh=>{ const c=cnt(sh); return '<div style="font-size:13px;color:#4A5B6B;margin-top:2px">'+sh.bin+"　"+(sh.driver||"")+"　"+(c.a+c.b)+"個</div>"; }).join("")+
+    "</div>";
+  $("detSearch").value=""; paintDetScans();
+  const dl=day.dupLog||[];
+  $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
+    fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">'+d.bin+"　検知 "+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
+  const xl=day.delLog||[];
+  $("detDel").innerHTML=xl.length?xl.map(d=>'<div class="row del"><span style="flex:1"><b class="num">'+fmt(d.no)+"</b> "+
+    '<span class="tag tag'+d.size+'">'+d.size+'cm</span><br><span style="font-size:12px;color:#4A5B6B">'+d.bin+"　"+d.kind+" "+hms(d.delTs)+"</span></span></div>").join(""):'<p class="note">なし</p>';
+  closeSheets(); openSheet("shDetail");
+}
 function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
-  detCur={day:day,sh:sh};
+  detCur={day:day,sh:sh}; detSize="all";
   $("detInternal").className=isStaff?"":"hide";
+  $("detDelWrap").className="";
   $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
   $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
@@ -1374,7 +1421,15 @@ $("detDelete").onclick=()=>{
         if(day===S) showView();
       }}); }});
 };
-$("detSub").onclick=()=>{ if(detCur) exportSubmit(detCur.day,[detCur.sh]); };
+$("detSub").onclick=()=>{
+  if(!detCur) return;
+  const list=detCur.all?detCur.day.shifts:[detCur.sh];
+  const rows=list.reduce((n,sh)=>n+sh.scans.length,0);
+  if(!rows){ notify("書き出す読取がありません",""); return; }
+  ask({title:(detCur.all?detCur.day.date+" 全便":detCur.sh.bin)+" のCSVを書き出します",
+    body:"番号 "+rows+"件\nファイル名 "+submitName(detCur.day,list.filter(sh=>sh.scans.length)),okText:"書き出す",
+    onOk:()=>exportSubmit(detCur.day,list)});
+};
 $("btnSubDay").onclick=()=>{ const day=dayByDate(admDate); if(day) exportSubmit(day,day.shifts); };
 // 便ごとのCSVを1つのZIPにまとめる（無圧縮・外部ライブラリ不要）
 const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
