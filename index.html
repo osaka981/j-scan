@@ -189,6 +189,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <div class="field"><label for="sDrv">ドライバー名</label><input id="sDrv" type="text" placeholder="氏名"></div>
     <div class="field"><label for="sTel">電話番号</label><input id="sTel" type="tel" inputmode="tel" placeholder="090-0000-0000"></div>
     <button class="btn go wide" id="btnStart">集荷スタート</button>
+    <button class="btn wide dim hide" id="btnOther">別のドライバーで始める</button>
     <div class="prev" id="startPrev"></div>
   </div>
   <button class="btn wide dim" id="btnSumFromStart">本日の集計を見る</button>
@@ -330,6 +331,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 
 <div class="sheet" id="shSum">
   <h2>本日の集計</h2>
+  <div class="field"><select class="day" id="sumWho"></select></div>
   <table id="sumTable"><thead><tr><th>便 / ドライバー</th><th>3cm</th><th>5cm</th><th>合計</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
   <p class="note" id="sumNote"></p>
 
@@ -489,6 +491,7 @@ async function resolveId(){
     $("sDrv").value=d.name; if(d.tel) $("sTel").value=d.tel;
     $("sId").value=canonId(raw);
     idState={kind:"driver",name:d.name};
+    if(isAutoBin($("sBin").value)) $("sBin").value=nextBinFor(raw,d.name);
     msg.textContent="登録済み："+d.name+(d.company?"（"+d.company+"）":""); msg.style.color="#1D6B45"; return;
   }
   const c=findCompany(raw);
@@ -509,6 +512,14 @@ const DEVKEY="jet-device-id";
 let DEVICE=localStorage.getItem(DEVKEY);
 if(!DEVICE){ DEVICE="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); localStorage.setItem(DEVKEY,DEVICE); }
 const shiftKey=sh=>DEVICE+"_"+sh.id;
+// 同じドライバー（IDが同じ。IDが無ければ氏名）の便を数える
+function sameDriver(sh,id,name){
+  const a=normId(id), n=(name||"").trim();
+  if(a&&sh.driverId) return normId(sh.driverId)===a;
+  return !!n && (sh.driver||"").trim()===n;
+}
+function nextBinFor(id,name){ return "第"+(S.shifts.filter(sh=>sameDriver(sh,id,name)).length+1)+"便"; }
+const isAutoBin=v=>/^第\d+便$/.test((v||"").trim())||!(v||"").trim();
 function shiftPayload(day,sh){
   const c=cnt(sh);
   return {
@@ -639,12 +650,13 @@ function prepStart(){
   const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
   const lastEnd=S.ends.length?S.ends[S.ends.length-1].ts:0;
   const carry=last&&!(lastEnd&&lastEnd>(last.closedAt||last.startedAt||0));   // 業務終了後は引き継がない
-  $("sBin").value="第"+(S.shifts.length+1)+"便";
+  $("sBin").value=carry?nextBinFor(last.driverId,last.driver):"第1便";
   $("sDrv").value=carry?last.driver:"";
   $("sTel").value=carry?(last.tel||""):"";
   $("sId").value=carry?(last.driverId||""):"";
   $("sIdMsg").textContent=""; idState={kind:"",name:""};
   if(carry&&last.driverId){ idState={kind:last.registered===false?"company":"driver",name:last.driver}; resolveId(); }
+  $("btnOther").className="btn wide dim"+(carry?"":" hide");
   let html="";
   if(last&&last.closed){
     const a=last.scans.filter(x=>x.size===3).length,b=last.scans.filter(x=>x.size===5).length;
@@ -657,6 +669,11 @@ function prepStart(){
   }
   $("startPrev").innerHTML=html;
 }
+$("btnOther").onclick=()=>{
+  $("sId").value=""; $("sDrv").value=""; $("sTel").value=""; $("sIdMsg").textContent=""; $("sBin").value="第1便";
+  idState={kind:"",name:""}; $("btnOther").className="btn wide dim hide";
+  setTimeout(()=>$("sId").focus(),50);
+};
 $("btnResume").onclick=()=>{
   const oi=openShiftIdx(); if(oi<0) return;
   S.active=oi; save(); showView(); render();
@@ -683,7 +700,8 @@ $("btnStart").onclick=()=>{
   if(!id){ notify("IDが未入力です","社員番号を入力してください。"); return; }
   const drv=$("sDrv").value.trim();
   if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
-  S.shifts.push({id:Date.now(),bin:$("sBin").value.trim()||("第"+(S.shifts.length+1)+"便"),
+  const binIn=$("sBin").value.trim();
+  S.shifts.push({id:Date.now(),bin:isAutoBin(binIn)?nextBinFor(id,drv):binIn,
     driver:drv,tel:$("sTel").value.trim(),driverId:canonId(id),corp:corpFromId(id),
     registered:idState.kind==="driver",
     startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
@@ -854,18 +872,32 @@ $("btnClose").onclick=()=>{
 $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
 
 /* ---------- 集計 ---------- */
+let sumWho=null;   // null=全員 / それ以外は driverId または氏名
+function driverKeyOf(sh){ return sh.driverId?normId(sh.driverId):(sh.driver||""); }
 function openSummary(){
   const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
+  // ドライバー選択：既定は開始画面に入っている人（無ければ最後の便の人）
+  const people=[]; S.shifts.forEach(sh=>{ const k=driverKeyOf(sh); if(k&&!people.some(p=>p.k===k)) people.push({k:k,n:sh.driver||k}); });
+  if(sumWho===null||!people.some(p=>p.k===sumWho)){
+    const curId=normId($("sId")?.value||""), curNm=($("sDrv")?.value||"").trim();
+    const hit=people.find(p=>p.k===curId)||people.find(p=>p.n===curNm)||(people.length?people[people.length-1]:null);
+    sumWho=people.length>1&&hit?hit.k:"__all";
+  }
+  const who=$("sumWho");
+  who.innerHTML=people.map(p=>'<option value="'+p.k+'"'+(sumWho===p.k?" selected":"")+">"+p.n+"</option>").join("")+
+    '<option value="__all"'+(sumWho==="__all"?" selected":"")+">全員</option>";
+  who.onchange=()=>{ sumWho=who.value; openSummary(); };
+  const list=sumWho==="__all"?S.shifts:S.shifts.filter(sh=>driverKeyOf(sh)===sumWho);
   let t3=0,t5=0;
-  tb.innerHTML=S.shifts.length?S.shifts.map(sh=>{
+  tb.innerHTML=list.length?list.map(sh=>{
     const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
     t3+=a;t5+=b;
     return "<tr><td>"+sh.bin+"<br><span style='font-size:11px;color:#4A5B6B'>"+(sh.driver||"")+"</span></td><td class='num'>"+a+"</td><td class='num'>"+b+"</td><td class='num'>"+(a+b)+"</td></tr>";
   }).join(""):"<tr><td colspan='4'>まだ便がありません</td></tr>";
-  tf.innerHTML="<tr><td>本日合計</td><td class='num'>"+t3+"</td><td class='num'>"+t5+"</td><td class='num'>"+(t3+t5)+"</td></tr>";
+  tf.innerHTML="<tr><td>"+(sumWho==="__all"?"本日合計":"本人合計")+"</td><td class='num'>"+t3+"</td><td class='num'>"+t5+"</td><td class='num'>"+(t3+t5)+"</td></tr>";
   $("sumNote").textContent="差出票へ転記：3cm "+t3+"個、5cm "+t5+"個、計 "+(t3+t5)+"個";
 
-  $("times").innerHTML=S.shifts.length?S.shifts.map(sh=>{
+  $("times").innerHTML=list.length?list.map(sh=>{
     const tel=sh.tel?' ・ <a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">発信</a>':"";
     return '<div class="row"><span style="flex:1"><b>'+sh.bin+"</b> "+(sh.driver||"")+
       '<br><span style="font-size:12px;color:#4A5B6B">開始 '+hhmm(sh.startedAt)+
@@ -1080,7 +1112,7 @@ $("btnSubNew").onclick=()=>{
   if(!list.length){ notify("未書き出しの便はありません",""); return; }
   exportSubmit(day,list);
 };
-$("btnSubToday").onclick=()=>exportSubmit(S,S.shifts);
+$("btnSubToday").onclick=()=>exportSubmit(S,sumWho==="__all"||sumWho===null?S.shifts:S.shifts.filter(sh=>driverKeyOf(sh)===sumWho));
 
 $("btnExpDay").onclick=()=>{
   if(!isStaff) return;
