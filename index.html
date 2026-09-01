@@ -183,10 +183,10 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <div id="vStart">
   <div class="panel">
     <h1>集荷を始める</h1>
+    <div class="field"><label for="sId">ID</label><input id="sId" type="tel" inputmode="numeric" autocomplete="off" placeholder="社員番号（例 5086 / 10001-001）"></div>
     <div class="field"><label for="sBin">便名</label><input id="sBin" type="text" placeholder="第1便"></div>
     <div class="field"><label for="sDrv">ドライバー名</label><input id="sDrv" type="text" placeholder="氏名"></div>
     <div class="field"><label for="sTel">電話番号</label><input id="sTel" type="tel" inputmode="tel" placeholder="090-0000-0000"></div>
-    <div class="field"><label for="sCorp">コード</label><input id="sCorp" type="tel" inputmode="numeric" maxlength="2" placeholder="1"></div>
     <button class="btn go wide" id="btnStart">集荷スタート</button>
     <div class="prev" id="startPrev"></div>
   </div>
@@ -521,7 +521,7 @@ function prepStart(){
   $("sBin").value="第"+(S.shifts.length+1)+"便";
   $("sDrv").value=last?last.driver:"";
   $("sTel").value=last?last.tel:"";
-  $("sCorp").value=last&&last.corp?last.corp:"1";
+  $("sId").value="";
   let html="";
   if(last&&last.closed){
     const a=last.scans.filter(x=>x.size===3).length,b=last.scans.filter(x=>x.size===5).length;
@@ -556,10 +556,12 @@ $("btnFinish").onclick=()=>{
     }});
 };
 $("btnStart").onclick=()=>{
+  const id=normId($("sId").value);
+  if(!id){ notify("IDが未入力です","社員番号を入力してください。"); return; }
   const drv=$("sDrv").value.trim();
   if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
   S.shifts.push({id:Date.now(),bin:$("sBin").value.trim()||("第"+(S.shifts.length+1)+"便"),
-    driver:drv,tel:$("sTel").value.trim(),corp:$("sCorp").value.trim()||"1",
+    driver:drv,tel:$("sTel").value.trim(),driverId:id,corp:corpFromId(id),
     startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
   S.active=S.shifts.length-1; save();
   mode3=true; selMode=false; sel.clear();
@@ -766,15 +768,15 @@ function openSummary(){
 }
 
 /* ---------- CSV ---------- */
-const CSVHEAD="日付,便,ドライバー,企業,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
+const CSVHEAD="日付,便,ドライバー,ID,企業,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
 function csvBody(day,shifts,withLogs){
   let out="";
   shifts.forEach(sh=>{
-    const base=[day.date,sh.bin,sh.driver,corpName(sh.corp),sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
+    const base=[day.date,sh.bin,sh.driver,sh.driverId||"",corpName(sh.corp),sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
     sh.scans.forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
   });
   if(withLogs)(day.dupLog||[]).forEach(x=>{
-    out+=[day.date,x.bin,"","","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
+    out+=[day.date,x.bin,"","","","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
   });
   return out;
 }
@@ -819,6 +821,15 @@ function exportSubmit(day,shifts){
 // 企業コード（社内用。ドライバー画面には社名を出さない）
 const CORPS={"1":"大阪急配","2":"株式会社UP","9":"その他"};
 const corpName=c=>CORPS[String(c||"").trim()]||(c?"未登録("+c+")":"未入力");
+// IDから企業を判定：10001-xxx / 10001 → UP、4〜5桁の数字のみ → 弊社、それ以外 → その他
+function corpFromId(id){
+  const t=String(id||"").replace(/[－ー–—]/g,"-").trim();
+  if(!t) return "";
+  if(/^10001(-|$)/.test(t)) return "2";
+  if(/^\d{4,5}$/.test(t)) return "1";
+  return "9";
+}
+const normId=id=>String(id||"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[－ー–—]/g,"-").trim();
 
 const PIN_STAFF="1108";   // 大阪急配（社内）
 const PIN_CLIENT="0981";  // お客様（閲覧・提出用CSVのみ）
@@ -900,7 +911,7 @@ function renderAdmin(){
                        :'<span class="badge b-open">計数中</span>';
     return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+sh.bin+"　"+(sh.driver||"")+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
-      (isStaff?"　"+corpName(sh.corp):"")+((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
+      (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:""):"")+((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
       '</div><div class="qty num">'+(c.a+c.b)+"</div></div>";
   }).join(""):'<p class="note">便がありません</p>')+
     (ends.length?'<div class="lhead" style="margin-top:10px">業務終了</div>'+ends.map(e=>
@@ -917,7 +928,7 @@ function openDetail(day,i){
   $("detMeta").innerHTML='<div class="alertbox" style="background:#FFF;border-color:#D3DBE3">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
     '<div style="font-size:20px;font-weight:800;margin-top:4px">3cm '+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"</div>"+
-    (isStaff?'<div style="margin-top:6px;font-size:14px;font-weight:700">'+corpName(sh.corp)+"</div>":"")+
+    (isStaff?'<div style="margin-top:6px;font-size:14px;font-weight:700">'+corpName(sh.corp)+(sh.driverId?'<span style="font-weight:500;color:#4A5B6B">　ID '+sh.driverId+"</span>":"")+"</div>":"")+
     ((isStaff&&sh.tel)?'<div style="margin-top:6px"><a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">'+sh.tel+" に発信</a></div>":"")+
     (sh.exportedAt?'<div class="badge b-done" style="margin-top:8px">書き出し済 '+hhmm(sh.exportedAt)+"</div>":"")+
     "</div>";
