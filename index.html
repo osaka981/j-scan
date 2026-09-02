@@ -314,6 +314,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div class="body" id="askBody"></div>
   <div class="field hide" id="askField"><input id="askInput" type="tel" inputmode="numeric" autocomplete="off"></div>
   <button class="btn wide" id="askOk">OK</button>
+  <button class="btn wide hide" id="askAlt">もう一つ</button>
   <button class="btn wide dim" id="askCancel">キャンセル</button>
 </div>
 
@@ -424,8 +425,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 
 <div class="sheet" id="shSum">
   <div class="sheethead">
-    <button class="btn sm dim" data-close>戻る</button>
+    <button class="btn sm dim" data-close>閉じる</button>
     <span class="ttl">本日の集計</span>
+    <button class="btn sm primary" id="btnNewShift">次の便を始める</button>
   </div>
   <button class="btn wide" id="btnCallSum">局へ発信</button>
   <div class="field"><select class="day" id="sumWho"></select></div>
@@ -449,8 +451,6 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <button class="btn wide" id="btnSubToday">提出用CSV（本日の全便）</button>
   <button class="btn wide danger hide" id="btnCancelShift">この便を取り消して開始画面へ戻る</button>
   <p class="note hide" id="cancelNote">IDやドライバーを間違えて始めたときに使います。読取があれば削除の記録に残ります。</p>
-  <button class="btn wide" id="btnNewShift">次の便を始める</button>
-  <button class="btn wide dim" data-close>閉じる</button>
   <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
 </div>
 
@@ -752,7 +752,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.41";
+const APP_VER="2026-09-02.42";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -777,7 +777,7 @@ document.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>{
 const digitsOf=v=>String(v||"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[^0-9]/g,"");
 
 /* ---------- 確認ダイアログ ---------- */
-let askOpen=false, askOnOk=null;
+let askOpen=false, askOnOk=null, askOnAlt=null;
 function ask(o){
   askOpen=true; askOnOk=o.onOk||null;
   $("askTitle").textContent=o.title||"";
@@ -787,14 +787,18 @@ function ask(o){
   $("askInput").value="";
   $("askOk").textContent=o.okText||"OK";
   $("askOk").className="btn wide"+(o.danger?" danger":"");
+  askOnAlt=o.onAlt||null;
+  $("askAlt").textContent=o.altText||"";
+  $("askAlt").className="btn wide"+(o.altText?"":" hide");
   $("askCancel").className="btn wide dim"+(o.noCancel?" hide":"");
   $("askScrim").classList.add("on"); $("askBox").classList.add("on");
   if(o.input) setTimeout(()=>$("askInput").focus(),90);
 }
-function askClose(){ askOpen=false; askOnOk=null; $("askScrim").classList.remove("on"); $("askBox").classList.remove("on"); }
+function askClose(){ askOpen=false; askOnOk=null; askOnAlt=null; $("askScrim").classList.remove("on"); $("askBox").classList.remove("on"); }
 $("askCancel").onclick=askClose;
 $("askScrim").onclick=askClose;
 $("askOk").onclick=()=>{ const v=$("askInput").value; const cb=askOnOk; askClose(); if(cb) cb(v); };
+$("askAlt").onclick=()=>{ const cb=askOnAlt; askClose(); if(cb) cb(); };
 $("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("askOk").click(); } });
 const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCancel:true});
 
@@ -1219,6 +1223,7 @@ async function crossCheck(sh){
 }
 function doClose(sh){
   sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0);
+  sumWho=driverKeyOf(sh)||"__all";        // 締めた本人の便だけを表示
   beep(880,120,.06); openSummary(); showView();
 }
 $("btnClose").onclick=async()=>{
@@ -1263,9 +1268,13 @@ $("btnClose").onclick=async()=>{
       okText:"締める",onOk:()=>doClose(sh)});
     return;
   }
+  const tel=(SET.postTel||"").trim();
   ask({title:sh.bin+"（"+sh.driver+"）を締めます",
     body:(res.ok?"":"※通信できないため、他のドライバーとの重複は確認できていません。\n\n")+base(a,b),
-    okText:"締める",onOk:()=>doClose(sh)});
+    okText:tel?"締めて発信する":"締める",
+    onOk:()=>{ doClose(sh); if(tel) setTimeout(()=>{ location.href="tel:"+tel.replace(/[^0-9+]/g,""); },400); },
+    altText:tel?"締めるだけ":"",
+    onAlt:()=>doClose(sh)});
 };
 $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
 
