@@ -752,7 +752,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.38";
+const APP_VER="2026-09-02.39";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -830,20 +830,31 @@ function commit(no){
   buzz(size===5?[40,40,40]:25);
   renderSoon();
 }
+let dupQ=[], dupOpen=false;
 function showDup(no,first){
-  if(locked) setLock(false);
   const now=Date.now();
   S.dupLog.push({no:no,ts:now,firstTs:first.ts,firstBin:first.bin,bin:cur().bin});
-  save();
-  $("dupNo").textContent=fmt(no);
-  $("dupNow").textContent=hms(now);
-  $("dupFirst").textContent=hms(first.ts);
-  $("dupBin").textContent="（"+first.bin+(first.driver?" / "+first.driver:"")+"）";
-  alarm(); openSheet("shDup");
+  saveSoon();
+  dupQ.push({no:no,ts:now,first:first});
   setBand("dup","二度読み検知",fmt(no),hms(first.ts)+" に読取済み");
-  render();
+  alarm();
+  if(!dupOpen) nextDup();
+  else $("dupAck").textContent="確認した（他に"+dupQ.length+"件）";
+  renderSoon();
 }
-$("dupAck").onclick=()=>{ closeSheets(); };
+function nextDup(){
+  const d=dupQ.shift();
+  if(!d){ dupOpen=false; closeSheets(); return; }
+  if(locked) setLock(false);
+  dupOpen=true;
+  $("dupNo").textContent=fmt(d.no);
+  $("dupNow").textContent=hms(d.ts);
+  $("dupFirst").textContent=hms(d.first.ts);
+  $("dupBin").textContent="（"+d.first.bin+(d.first.driver?" / "+d.first.driver:"")+"）";
+  $("dupAck").textContent=dupQ.length?("確認した（他に"+dupQ.length+"件）"):"確認した";
+  openSheet("shDup");
+}
+$("dupAck").onclick=()=>{ if(dupQ.length) nextDup(); else { dupOpen=false; closeSheets(); } };
 
 function setBand(cls,t,big,sub){
   const b=$("band"); b.className="band"+(cls?" "+cls:"");
@@ -1131,7 +1142,8 @@ document.addEventListener("keydown",e=>{
       if(el.id==="hisSearch"||el.id==="detSearch"){ try{ el.value=""; }catch(err){} }
       if(el.id==="hisSearch") render();
     }
-    if(sheetOpen||askOpen||!inScan()) return;
+    if(askOpen||!inScan()) return;
+    if(sheetOpen&&!dupOpen) return;      // 二度読みの確認中は読み取りを続けられる
     handle(code);
     if(locked) paintLock();
     return;
