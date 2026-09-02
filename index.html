@@ -26,7 +26,7 @@ body{
   background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
   font-size:15px;line-height:1.45;display:flex;flex-direction:column;
-  height:100dvh;overflow:hidden;user-select:none;
+  position:fixed;inset:0;width:100%;height:100%;overflow:hidden;user-select:none;
 }
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
 .hide{display:none !important}
@@ -111,6 +111,12 @@ footer .btn{flex:1}
 #lockView{position:fixed;inset:0;z-index:60;background:var(--lock);display:none;
   flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
 #lockView.on{display:flex}
+#lockView.dark{background:#000;color:#3C4A57}
+#lockView.dark .lt,#lockView.dark .lb,#lockView.dark .lcs{color:#3C4A57}
+#lockView.dark .lc{color:#7C8B99}
+#lockView.dark #unlock{background:#0C0F12;border-color:#242C34;color:#6C7B89}
+#lockView .eco{margin-top:16px;font-size:12px;color:var(--ink-2);text-decoration:underline;background:none;border:none;font-family:inherit}
+#lockView.dark .eco{color:#3C4A57}
 #lockView .lt{font-size:20px;font-weight:800;letter-spacing:.02em}
 #lockView .lb{font-size:13px;color:var(--ink-2);margin-top:6px}
 #lockView .lc{font-size:56px;font-weight:800;margin-top:22px;line-height:1}
@@ -291,11 +297,12 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 
 <!-- ============ ロック画面 ============ -->
 <div id="lockView">
-  <div class="lt">画面ロック中</div>
+  <div class="lt">画面ロック中（読み取りは続けられます）</div>
   <div class="lb" id="lockSub"></div>
   <div class="lc num" id="lockCount">0</div>
   <div class="lcs" id="lockBreak"></div>
   <button id="unlock"><span class="fill" id="ufill"></span><span class="t">長押しで解除</span></button>
+  <button class="eco" id="ecoBtn">省電力表示に切り替える</button>
 </div>
 
 <div class="scrim" id="scrim"></div>
@@ -346,6 +353,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div id="admSummary"></div>
   <h3>便の一覧</h3>
   <div id="admList"></div>
+  <button class="btn wide danger hide" id="btnDelPicked">選択した便を削除する</button>
+
   <h3>提出用（お客様へ渡す）</h3>
   <button class="btn wide" id="btnSubDay">この日の全便を書き出す（1ファイル）</button>
   <button class="btn wide" id="btnSubZip">便ごとのCSVをまとめて保存（ZIP）</button>
@@ -698,7 +707,7 @@ async function syncNow(){
       sh._synced=stamp;
       // 番号一覧は 20件たまるごと / 減ったとき / 締めたとき だけ送る（通信量対策）
       const nlen=sh.scans.length, plen=sh._nosLen||0;
-      if(nlen-plen>=20||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
+      if(nlen-plen>=100||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
         const nr=await fetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+"/"+shiftKey(sh)+".json",
           {method:"PUT",headers:{"Content-Type":"application/json"},
            body:JSON.stringify(sh.scans.map(x=>({n:x.no,s:x.size,t:x.ts})))});
@@ -722,8 +731,18 @@ window.addEventListener("offline",paintSync);
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") scheduleSync(300); });
 setInterval(()=>{ scheduleSync(0); },60000);
 
+/* ---------- キーボード表示時のずれ対策 ---------- */
+document.addEventListener("focusin",e=>{
+  const el=e.target;
+  if(!el||!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+  setTimeout(()=>{
+    try{ window.scrollTo(0,0); el.scrollIntoView({block:"center",behavior:"smooth"}); }catch(err){}
+  },300);
+});
+document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
+
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.29";
+const APP_VER="2026-09-02.35";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -770,21 +789,28 @@ $("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefa
 const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCancel:true});
 
 /* ---------- 読取 ---------- */
+let seenIdx=null;
+function buildSeen(){ seenIdx=new Map(); S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>seenIdx.set(x.no,true))); }
 function handle(raw){
   const no=normalize(raw); if(!no) return;
   if(!inScan()) return;
+  if(!seenIdx) buildSeen();
 
   if(!/^\d{12}$/.test(no)){
     setBand("dup","12桁ではありません",no,no.length+"桁を読み取りました。カウントしていません");
     beep(220,320,.09); buzz([80,60,80]); return;
   }
-  const first=findFirst(no);
-  if(first){ showDup(no,first); return; }
+  if(seenIdx.has(no)){
+    const first=findFirst(no);
+    if(first){ showDup(no,first); return; }
+    seenIdx.delete(no);
+  }
 
   commit(no);
 }
 function commit(no){
   const size=mode3?3:5;
+  seenIdx&&seenIdx.set(no,true);
   cur().scans.push({no:no,size:size,ts:Date.now()});
   save(); markDirty(cur());
   setBand("ok",size+"cm で登録",fmt(no),"この便 "+cur().scans.length+"件");
@@ -793,6 +819,7 @@ function commit(no){
   render();
 }
 function showDup(no,first){
+  if(locked) setLock(false);
   const now=Date.now();
   S.dupLog.push({no:no,ts:now,firstTs:first.ts,firstBin:first.bin,bin:cur().bin});
   save();
@@ -816,6 +843,7 @@ function setBand(cls,t,big,sub){
 /* ---------- 画面切替 ---------- */
 function showView(){
   const scan=inScan();
+  keepAwake(scan);
   $("vStart").className=scan?"hide":"";
   $("vScan").className=scan?"":"hide";
   if(scan) $("vScan").style.display="flex";
@@ -952,6 +980,7 @@ function removeScans(items,kind){
   const nos=new Set(items.map(x=>x.no));
   items.forEach(x=>S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:kind}));
   sh.scans=sh.scans.filter(x=>!nos.has(x.no));
+  seenIdx=null;
   sel.clear(); save(); markDirty(sh); render();
 }
 $("btnSel").onclick=()=>{ selMode=!selMode; sel.clear(); render(); };
@@ -997,10 +1026,39 @@ function paintLock(){
   $("lockCount").textContent=c3+c5;
   $("lockBreak").textContent="3cm "+c3+" ・ 5cm "+c5;
 }
+let eco=localStorage.getItem("jet-eco")==="1";
+function paintEco(){
+  $("lockView").classList.toggle("dark",eco);
+  $("ecoBtn").textContent=eco?"通常の明るさに戻す":"省電力表示に切り替える";
+}
+$("ecoBtn").onclick=()=>{ eco=!eco; localStorage.setItem("jet-eco",eco?"1":"0"); paintEco(); };
 function setLock(v){
   locked=v; $("lockView").classList.toggle("on",v);
-  if(v) paintLock();
+  if(v){ paintEco(); paintLock(); }
 }
+
+// 計数中は画面を消させない（対応端末のみ）
+let wakeLock=null;
+async function keepAwake(on){
+  try{
+    if(on){ if(!wakeLock&&navigator.wakeLock) wakeLock=await navigator.wakeLock.request("screen"); }
+    else if(wakeLock){ await wakeLock.release(); wakeLock=null; }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    if(inScan()) keepAwake(true);
+    const away=Date.now()-(hiddenAt||0);
+    if(hiddenAt&&away>8000&&inScan()){
+      const sh=cur(), c=cnt(sh);
+      notify("画面が消えていた間は読み取れていません",
+        "止まっていた時間 約"+Math.round(away/1000)+"秒\nこの便の件数：3cm "+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+
+        "\n数が合わない場合は、その間に通した分を読み直してください。");
+    }
+    hiddenAt=0;
+  }else{ hiddenAt=Date.now(); }
+});
+let hiddenAt=0;
 $("btnLock").onclick=()=>setLock(true);
 let lockWarnT=null;
 function notifyLocked(){
@@ -1023,22 +1081,41 @@ function notifyLocked(){
 })();
 
 /* ---------- リーダー入力 ---------- */
-let buf="", bufT=0;
+// リーダーは1文字ずつが高速（50ms以下）で届く。手入力とは速さで判別する。
+let buf="", bufT=0, fastN=0;
 document.addEventListener("keydown",e=>{
-  if(locked){ notifyLocked(); return; }
-  if(sheetOpen||askOpen||!inScan()) return;
-  if(document.activeElement&&document.activeElement.tagName==="INPUT") return;
-  const now=Date.now();
-  if(now-bufT>400) buf="";
+  const el=document.activeElement;
+  const inField=!!(el&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  const now=Date.now(), gap=now-bufT;
+  if(gap>400){ buf=""; fastN=0; }
   bufT=now;
-  if(e.key==="Enter"||e.key==="Tab"){ e.preventDefault(); if(buf.length>=6) handle(buf); buf=""; return; }
-  if(e.key.length===1){ buf+=e.key; if(buf.length>40)buf=buf.slice(-40); }
+
+  if(e.key==="Enter"||e.key==="Tab"){
+    const isReader=buf.length>=6&&fastN>=Math.min(4,buf.length-1);
+    if(!isReader){ buf=""; fastN=0; return; }          // 人の入力はそのまま各欄に任せる
+    e.preventDefault();
+    const code=buf; buf=""; fastN=0;
+    if(inField){                                       // 欄に紛れ込んだ分を消してカーソルを外す
+      try{ el.value=el.value.replace(code,""); el.blur(); }catch(err){}
+      if(el.id==="hisSearch"||el.id==="detSearch"){ try{ el.value=""; }catch(err){} }
+      render();
+    }
+    if(sheetOpen||askOpen||!inScan()) return;
+    handle(code);
+    if(locked) paintLock();
+    return;
+  }
+  if(e.key.length===1){
+    if(gap<=50&&buf.length) fastN++;
+    buf+=e.key; if(buf.length>40){ buf=buf.slice(-40); }
+  }
 });
 
 /* ---------- シート ---------- */
 function openSheet(id){ sheetOpen=true; $("scrim").classList.add("on"); $(id).classList.add("on"); }
 function closeSheets(){ sheetOpen=false; $("scrim").classList.remove("on");
-  document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("on")); }
+  document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("on"));
+  try{ const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) a.blur(); }catch(e){} }
 $("scrim").onclick=()=>{ if($("shDup").classList.contains("on")) return; closeSheets(); };
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheets);
 
@@ -1420,7 +1497,8 @@ function paintAdminDay(day,remoteLoaded){
     const bad=sh.closed?(sh.exportedAt?'<span class="badge b-done">書き出し済 '+hhmm(sh.exportedAt)+"</span>":'<span class="badge b-todo">未書き出し</span>')
                        :'<span class="badge b-open">計数中</span>';
     const callBtn=(isStaff&&sh.tel)?' <a class="btn sm" style="padding:4px 10px;margin-left:6px;text-decoration:none;color:var(--blue);border-color:#8FB4D8;background:var(--blue-bg)" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'" onclick="event.stopPropagation()">発信</a>':"";
-    return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+sh.bin+"　"+(sh.driver||"")+callBtn+"</div>"+
+    const pick=isStaff?'<input type="checkbox" class="pick" data-k="'+keyOf(sh)+'" onclick="event.stopPropagation()" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px">':"";
+    return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+pick+sh.bin+"　"+(sh.driver||"")+callBtn+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
       (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+
       ((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
@@ -1548,7 +1626,7 @@ function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
   detCur={day:day,sh:sh};
   $("detInternal").className=isStaff?"":"hide";
-  $("detDelWrap").className=(isStaff&&!sh._remote)?"":"hide";
+  $("detDelWrap").className=isStaff?"":"hide";
   $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
   $("detMeta").innerHTML='<div class="metabox">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
@@ -1581,14 +1659,18 @@ $("detDelete").onclick=()=>{
     onOk:()=>{ ask({title:"本当に削除しますか",body:"元に戻せません。削除の記録にだけ残ります。",okText:"削除を実行する",danger:true,
       onOk:()=>{
         const now=Date.now();
-        day.delLog=day.delLog||[];
-        sh.scans.forEach(x=>day.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"便削除"}));
+        const local=(day.date===S.date)?S:admArchive.find(d=>d.date===day.date);
+        if(local){
+          local.delLog=local.delLog||[];
+          (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>local.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"便削除"}));
+          local.shifts=local.shifts.filter(x=>keyOf(x)!==keyOf(sh));
+        }
         day.shifts=day.shifts.filter(x=>x!==sh);
-        if(day===S){ if(S.active>=0&&!S.shifts[S.active]) S.active=-1; save(); } else { writeArchive(admArchive); }
+        if(day.date===S.date){ if(S.active>=0&&!S.shifts[S.active]) S.active=-1; seenIdx=null; save(); } else { writeArchive(admArchive); }
         fbDeleteShift(day,sh);
         closeSheets(); openAdmin();
         notify("便を削除しました",sh.bin+"（"+sh.driver+"）を削除の記録に残しました。");
-        if(day===S) showView();
+        if(day.date===S.date) showView();
       }}); }});
 };
 $("detSub").onclick=()=>{
@@ -1599,6 +1681,42 @@ $("detSub").onclick=()=>{
   ask({title:(detCur.all?detCur.day.date+" 全便":detCur.sh.bin)+" のCSVを書き出します",
     body:"番号 "+rows+"件\nファイル名 "+submitName(detCur.day,list.filter(sh=>sh.scans.length)),okText:"書き出す",
     onOk:()=>exportSubmit(detCur.day,list)});
+};
+function pickedKeys(){ return Array.from(document.querySelectorAll("#admList .pick:checked")).map(b=>b.getAttribute("data-k")); }
+document.addEventListener("change",e=>{
+  if(e.target&&e.target.classList&&e.target.classList.contains("pick")){
+    const n=pickedKeys().length, b=$("btnDelPicked");
+    b.className="btn wide danger"+(n?"":" hide");
+    b.textContent="選択した便を削除する（"+n+"便）";
+  }
+});
+$("btnDelPicked").onclick=()=>{
+  if(!isStaff||!admCurDay) return;
+  const keys=pickedKeys(); if(!keys.length) return;
+  const day=admCurDay;
+  const list=day.shifts.filter(sh=>keys.includes(keyOf(sh)));
+  const rows=list.reduce((n,sh)=>{ const c=cnt(sh); return n+c.a+c.b; },0);
+  ask({title:list.length+"便を削除します",
+    body:day.date+"\n"+list.map(sh=>sh.bin+"　"+(sh.driver||"")).join("\n")+"\n読取 "+rows+"件",
+    okText:"削除に進む",danger:true,
+    onOk:()=>{ ask({title:"本当に削除しますか",body:"元に戻せません。削除の記録にだけ残ります。",okText:"削除を実行する",danger:true,
+      onOk:async()=>{
+        const now=Date.now();
+        const local=(day.date===S.date)?S:admArchive.find(d=>d.date===day.date);
+        for(const sh of list){
+          if(local){
+            local.delLog=local.delLog||[];
+            (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>local.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"便削除"}));
+            local.shifts=local.shifts.filter(x=>keyOf(x)!==keyOf(sh));
+          }
+          await fbDeleteShift(day,sh);
+        }
+        if(day.date===S.date){ if(S.active>=0&&!S.shifts[S.active]) S.active=-1; seenIdx=null; save(); showView(); }
+        else writeArchive(admArchive);
+        $("btnDelPicked").className="btn wide danger hide";
+        renderAdmin();
+        notify(list.length+"便を削除しました","");
+      }}); }});
 };
 $("btnSubDay").onclick=()=>{ if(admCurDay) exportSubmit(admCurDay,admCurDay.shifts); };
 // 便ごとのCSVを1つのZIPにまとめる（無圧縮・外部ライブラリ不要）
