@@ -723,7 +723,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 setInterval(()=>{ scheduleSync(0); },60000);
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.28";
+const APP_VER="2026-09-02.29";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1666,13 +1666,25 @@ $("btnWipeToday").onclick=()=>{
     onOk:()=>{ ask({title:"本当に消去しますか",body:"",okText:"消去を実行する",danger:true,
       onOk:()=>{ S=blank(); save(); closeSheets(); showView(); notify("本日のデータを消去しました",""); }}); }});
 };
-$("btnExpAll").onclick=()=>{
+$("btnExpAll").onclick=async()=>{
   if(!isStaff) return;
   admArchive=readArchive();
+  const daysAll=admArchive.concat([S]);
+  // 端末から番号を落とした日はFirebaseから取り寄せてから書き出す
+  let missed=false;
+  for(const d of daysAll){
+    const need=d.shifts.filter(sh=>sh._stripped||!Array.isArray(sh.scans));
+    if(!need.length) continue;
+    need.forEach(sh=>{ sh._key=sh._key||shiftKey(sh); });
+    const ok=await ensureScans(d.date,need);
+    if(!ok) missed=true;
+    need.forEach(sh=>{ if(Array.isArray(sh.scans)&&sh.scans.length) sh._stripped=false; });
+  }
   let out=CSVHEAD;
-  admArchive.concat([S]).forEach(d=>{ out+=csvBody(d,d.shifts,true); d.shifts.forEach(sh=>sh.exportedAt=Date.now()); });
+  daysAll.forEach(d=>{ out+=csvBody(d,d.shifts,true); d.shifts.forEach(sh=>sh.exportedAt=Date.now()); });
   writeArchive(admArchive); save();
   download("jet_all.csv",out); renderAdmin();
+  if(missed) notify("一部の番号を取得できませんでした","古い日の番号が欠けている可能性があります。経営管理の月次CSVをご利用ください。");
 };
 
 /* ---------- 画面を消さない ---------- */
