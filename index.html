@@ -488,9 +488,41 @@ function archive(s){
     a.push(s); a=dedupeDays(a);
     while(a.length>60)a.shift();
     localStorage.setItem(AKEY,JSON.stringify(a));
+    stripOldArchive();
   }catch(e){}
 }
-function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); }catch(e){} }
+function stripOldArchive(){
+  try{
+    const a=JSON.parse(localStorage.getItem(AKEY)||"[]");
+    const cut=new Date(); cut.setDate(cut.getDate()-7);
+    const cutStr=cut.getFullYear()+"-"+String(cut.getMonth()+1).padStart(2,"0")+"-"+String(cut.getDate()).padStart(2,"0");
+    let changed=false;
+    a.forEach(d=>{
+      if(d.date>=cutStr) return;
+      (d.shifts||[]).forEach(sh=>{
+        if(Array.isArray(sh.scans)&&sh.scans.length){
+          const c=cnt(sh); sh.c3=c.a; sh.c5=c.b; sh.scans=[]; sh._stripped=true; changed=true;
+        }
+      });
+      if(d.dupLog&&d.dupLog.length){ d.dupLog=[]; changed=true; }
+      if(d.delLog&&d.delLog.length>50){ d.delLog=d.delLog.slice(-50); changed=true; }
+    });
+    if(changed) localStorage.setItem(AKEY,JSON.stringify(a));
+    return changed;
+  }catch(e){ return false; }
+}
+let saveWarned=false;
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); }
+  catch(e){
+    stripOldArchive();
+    try{ localStorage.setItem(KEY,JSON.stringify(S)); }
+    catch(e2){
+      if(!saveWarned){ saveWarned=true;
+        notify("端末への保存に失敗しています","空き容量が不足しています。計数は続けられますが、同期済であることを必ず確認してください。"); }
+    }
+  }
+}
 const cur=()=>S.shifts[S.active];
 const inScan=()=>S.active>=0 && cur() && !cur().closed;
 
@@ -643,7 +675,6 @@ function shiftPayload(day,sh){
     corp:sh.corp||"", corpName:corpName(sh.corp), registered:sh.registered!==false,
     startedAt:sh.startedAt||null, closedAt:sh.closedAt||null, closed:!!sh.closed,
     c3:c.a, c5:c.b, total:c.a+c.b,
-    scans:sh.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})),
     dupCount:(day.dupLog||[]).filter(d=>d.bin===sh.bin).length,
     delCount:(day.delLog||[]).filter(d=>d.bin===sh.bin).length,
     exportedAt:sh.exportedAt||null,
@@ -663,7 +694,16 @@ async function syncNow(){
     try{
       const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+"/"+shiftKey(sh)+".json",
         {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(shiftPayload(S,sh))});
-      if(r.ok){ sh._synced=stamp; }
+      if(!r.ok) continue;
+      sh._synced=stamp;
+      // 番号一覧は 20件たまるごと / 減ったとき / 締めたとき だけ送る（通信量対策）
+      const nlen=sh.scans.length, plen=sh._nosLen||0;
+      if(nlen-plen>=20||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
+        const nr=await fetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+"/"+shiftKey(sh)+".json",
+          {method:"PUT",headers:{"Content-Type":"application/json"},
+           body:JSON.stringify(sh.scans.map(x=>({n:x.no,s:x.size,t:x.ts})))});
+        if(nr.ok){ sh._nosLen=nlen; if(sh.closed) sh._nosDone=true; }
+      }
     }catch(e){ break; }
   }
   save(); syncBusy=false; paintSync();
@@ -683,7 +723,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 setInterval(()=>{ scheduleSync(0); },60000);
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.27";
+const APP_VER="2026-09-02.28";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1051,6 +1091,7 @@ $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締め
 let sumWho=null;   // null=全員 / それ以外は driverId または氏名
 async function fbDeleteShift(day,sh){
   try{ await fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
+  try{ await fetch(FB_URL+"/nikki/jet_scan_nos/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
 }
 $("btnCancelShift").onclick=()=>{
   if(!inScan()) return;
@@ -1076,7 +1117,9 @@ async function fetchDayAll(){
     const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"); const v=await r.json();
     if(v&&typeof v==="object"){
       Object.values(v).forEach(j=>{ if(!j||!j.key) return;
-        map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",scans:(j.scans||[]).map(x=>({no:x.no,size:x.size,ts:x.ts})),
+        map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
+          scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
+          c3:j.c3||0,c5:j.c5||0,
           startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,exportedAt:j.exportedAt||null,_remote:true,_key:j.key,_dev:j.device||""}); });
       dayAllRemote=true;
     }
@@ -1108,7 +1151,7 @@ function paintSummary(){
   const list=sumWho==="__all"?dayAll:dayAll.filter(sh=>driverKeyOf(sh)===sumWho);
   let t3=0,t5=0;
   tb.innerHTML=list.length?list.map(sh=>{
-    const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
+    const c=cnt(sh), a=c.a, b=c.b;
     t3+=a;t5+=b;
     return "<tr><td>"+sh.bin+"<br><span style='font-size:11px;color:#4A5B6B'>"+(sh.driver||"")+"</span></td><td class='num'>"+a+"</td><td class='num'>"+b+"</td><td class='num'>"+(a+b)+"</td></tr>";
   }).join(""):"<tr><td colspan='4'>まだ便がありません</td></tr>";
@@ -1148,7 +1191,7 @@ function csvBody(day,shifts,withLogs){
   let out="";
   shifts.forEach(sh=>{
     const base=[day.date,sh.bin,sh.driver,sh.driverId||"",corpName(sh.corp),sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
-    sh.scans.forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
+    (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
   });
   if(withLogs)(day.dupLog||[]).forEach(x=>{
     out+=[day.date,x.bin,"","","","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
@@ -1174,7 +1217,7 @@ const ymd=d=>String(d).replace(/-/g,"");
 function csvSubmit(day,shifts){
   let out=SUBHEAD;
   shifts.forEach(sh=>{
-    sh.scans.forEach(x=>{
+    (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>{
       out+=[day.date,sh.bin,sh.driver,x.size,x.no,hms(x.ts)].join(",")+"\n";
     });
   });
@@ -1184,10 +1227,12 @@ function submitName(day,shifts){
   if(shifts.length===1) return ORG+"_"+ymd(day.date)+"_bin"+binNo(day,shifts[0])+".csv";
   return ORG+"_"+ymd(day.date)+".csv";
 }
-function exportSubmit(day,shifts){
+async function exportSubmit(day,shifts){
   if(!shifts.length){ notify("書き出す便がありません",""); return; }
-  const rows=shifts.reduce((n,sh)=>n+sh.scans.length,0);
+  const rows=shifts.reduce((n,sh)=>{ const c=cnt(sh); return n+c.a+c.b; },0);
   if(!rows){ notify("読取が0件です","この範囲には番号がありません。"); return; }
+  const ok=await ensureScans(day.date,shifts);
+  if(!ok){ notify("番号を取得できませんでした","電波のある場所でもう一度書き出してください。"); return; }
   download(submitName(day,shifts),csvSubmit(day,shifts));
   markExported(day,shifts);
 }
@@ -1227,7 +1272,8 @@ async function fetchDayMerged(date){
     if(v&&typeof v==="object") Object.values(v).forEach(j=>{
       if(!j||!j.key) return;
       map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
-        scans:(j.scans||[]).map(x=>({no:x.no,size:x.size,ts:x.ts})),
+        scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
+        c3:j.c3||0,c5:j.c5||0,
         startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,
         exportedAt:j.exportedAt||null,registered:j.registered!==false,_remote:true,_key:j.key});
     });
@@ -1237,6 +1283,22 @@ async function fetchDayMerged(date){
   return {date:date,shifts:Array.from(map.values()).sort((a,b)=>(a.startedAt||0)-(b.startedAt||0)),
           ends:(local&&local.ends)||[],dupLog:(local&&local.dupLog)||[],delLog:(local&&local.delLog)||[],
           _local:local||null};
+}
+async function ensureScans(date,shifts){
+  const need=shifts.filter(sh=>!Array.isArray(sh.scans));
+  if(!need.length) return true;
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_scan_nos/"+date+".json");
+    const v=(await r.json())||{};
+    need.forEach(sh=>{
+      const a=v[sh._key];
+      sh.scans=Array.isArray(a)?a.map(x=>({no:x.n||x.no,size:x.s||x.size,ts:x.t||x.ts})):[];
+    });
+    return true;
+  }catch(e){
+    need.forEach(sh=>{ if(!Array.isArray(sh.scans)) sh.scans=[]; sh._stripped=true; });
+    return false;
+  }
 }
 function buildLocalDay(date){
   const local=(date===S.date)?S:admArchive.find(x=>x.date===date);
@@ -1273,7 +1335,10 @@ function markExported(day,shifts){
   if(day.date===S.date){ save(); scheduleSync(500); }
   if($("shAdmin").classList.contains("on")) renderAdmin();
 }
-const cnt=sh=>({a:sh.scans.filter(x=>x.size===3).length,b:sh.scans.filter(x=>x.size===5).length});
+const cnt=sh=>{
+  if(!Array.isArray(sh.scans)||sh._stripped) return {a:sh.c3||0,b:sh.c5||0};
+  return {a:sh.scans.filter(x=>x.size===3).length,b:sh.scans.filter(x=>x.size===5).length};
+};
 
 $("btnAdmin").onclick=()=>{
   if(!adminOK){
@@ -1371,8 +1436,8 @@ let detCur=null;
 
 function detAllScans(){
   if(!detCur) return [];
-  if(detCur.all) return detCur.day.shifts.flatMap(sh=>sh.scans.map(x=>Object.assign({},x,{_bin:sh.bin,_drv:sh.driver||""})));
-  return detCur.sh.scans;
+  if(detCur.all) return detCur.day.shifts.flatMap(sh=>(Array.isArray(sh.scans)?sh.scans:[]).map(x=>Object.assign({},x,{_bin:sh.bin,_drv:sh.driver||""})));
+  return Array.isArray(detCur.sh.scans)?detCur.sh.scans:[];
 }
 function paintDetScans(){
   if(!detCur) return;
@@ -1468,7 +1533,9 @@ function openDayDetail(day){
     '<div style="font-size:14px;margin-top:4px">便数 '+day.shifts.length+"</div>"+
     day.shifts.map(sh=>{ const c=cnt(sh); return '<div style="font-size:13px;color:#4A5B6B;margin-top:2px">'+sh.bin+"　"+(sh.driver||"")+"　"+(c.a+c.b)+"個</div>"; }).join("")+
     "</div>";
-  $("detSearch").value=""; paintDetScans();
+  $("detSearch").value="";
+  $("detScans").innerHTML='<p class="note">番号を読み込み中</p>';
+  ensureScans(day.date,day.shifts).then(ok=>{ paintDetScans(); if(!ok) notify("番号を取得できませんでした","個数は表示できますが、番号一覧は電波のある場所で開き直してください。"); });
   const dl=day.dupLog||[];
   $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
     fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">'+d.bin+"　検知 "+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
@@ -1490,7 +1557,11 @@ function openDetail(day,i){
     ((isStaff&&sh.tel)?'<div style="margin-top:6px"><a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">'+sh.tel+" に発信</a></div>":"")+
     (sh.exportedAt?'<div class="badge b-done" style="margin-top:8px">書き出し済 '+hhmm(sh.exportedAt)+"</div>":"")+
     "</div>";
-  $("detSearch").value=""; paintDetScans();
+  $("detSearch").value="";
+  if(!Array.isArray(sh.scans)){
+    $("detScans").innerHTML='<p class="note">番号を読み込み中</p>';
+    ensureScans(day.date,[sh]).then(()=>paintDetScans());
+  }else paintDetScans();
   const dl=(day.dupLog||[]).filter(d=>d.bin===sh.bin);
   $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
     fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">検知 '+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
@@ -1523,7 +1594,7 @@ $("detDelete").onclick=()=>{
 $("detSub").onclick=()=>{
   if(!detCur) return;
   const list=detCur.all?detCur.day.shifts:[detCur.sh];
-  const rows=list.reduce((n,sh)=>n+sh.scans.length,0);
+  const rows=list.reduce((n,sh)=>{ const c=cnt(sh); return n+c.a+c.b; },0);
   if(!rows){ notify("書き出す読取がありません",""); return; }
   ask({title:(detCur.all?detCur.day.date+" 全便":detCur.sh.bin)+" のCSVを書き出します",
     body:"番号 "+rows+"件\nファイル名 "+submitName(detCur.day,list.filter(sh=>sh.scans.length)),okText:"書き出す",
@@ -1553,14 +1624,17 @@ function makeZip(files){   // files: [{name, text}]
 }
 $("btnSubZip").onclick=()=>{
   const day=admCurDay; if(!day) return;
-  const list=day.shifts.filter(sh=>sh.scans.length);
+  const list=day.shifts.filter(sh=>{ const c=cnt(sh); return c.a+c.b>0; });
   if(!list.length){ notify("書き出す便がありません",""); return; }
+  ensureScans(day.date,list).then(ok=>{
+  if(!ok){ notify("番号を取得できませんでした","電波のある場所でもう一度お試しください。"); return; }
   const files=list.map(sh=>({name:submitName(day,[sh]),text:csvSubmit(day,[sh])}));
   const blob=makeZip(files); const a=document.createElement("a");
   a.href=URL.createObjectURL(blob); a.download=ORG+"_"+ymd(day.date)+"_bins.zip"; a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),3000);
   markExported(day,list);
   notify("ZIPに"+files.length+"ファイルをまとめました","便ごとのCSVが1ファイルずつ入っています。");
+  });
 };
 $("btnSubNew").onclick=()=>{
   const day=admCurDay; if(!day) return;
