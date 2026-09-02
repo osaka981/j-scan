@@ -752,7 +752,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.40";
+const APP_VER="2026-09-02.41";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1193,17 +1193,79 @@ $("btnLogout").onclick=()=>{
     }});
 };
 
-$("btnClose").onclick=()=>{
+// 他のドライバー（別端末を含む）と番号が重複していないかを締める前に確認する
+async function crossCheck(sh){
+  const mine=new Set(S.shifts.map(x=>shiftKey(x)));
+  const out=[];
+  try{
+    const [sr,nr]=await Promise.all([
+      fetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"),
+      fetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+".json")
+    ]);
+    const sum=(await sr.json())||{}, nos=(await nr.json())||{};
+    const idx=new Map();                       // 番号 -> 先に読んだ人
+    Object.values(sum).forEach(j=>{
+      if(!j||!j.key||mine.has(j.key)||isGone(j.key)) return;
+      const arr=Array.isArray(nos[j.key])?nos[j.key]:(Array.isArray(j.scans)?j.scans.map(x=>({n:x.no,s:x.size,t:x.ts})):[]);
+      arr.forEach(x=>{
+        const no=x.n||x.no, ts=x.t||x.ts||0;
+        const cur0=idx.get(no);
+        if(!cur0||ts<cur0.ts) idx.set(no,{ts:ts,bin:j.bin||"",driver:j.driverName||"",closed:!!j.closed});
+      });
+    });
+    sh.scans.forEach(x=>{ const o=idx.get(x.no); if(o) out.push({no:x.no,size:x.size,mineTs:x.ts,other:o}); });
+    return {ok:true,list:out};
+  }catch(e){ return {ok:false,list:[]}; }
+}
+function doClose(sh){
+  sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0);
+  beep(880,120,.06); openSummary(); showView();
+}
+$("btnClose").onclick=async()=>{
   const sh=cur();
   if(!sh.scans.length){ setBand("warn","読取が0件です","","締める前に読み取ってください"); return; }
-  const a=sh.scans.filter(x=>x.size===3).length,b=sh.scans.filter(x=>x.size===5).length;
+  setBand("warn","他のドライバーとの重複を確認しています","","少しお待ちください");
+  const res=await crossCheck(sh);
+  const later=res.list.filter(d=>d.mineTs>=d.other.ts);   // こちらが後から読んだ分
+  const earlier=res.list.filter(d=>d.mineTs<d.other.ts);
+  const a=cnt(sh).a, b=cnt(sh).b;
   const dest=(SET.postName||"").trim()||"郵便局";
-  ask({title:sh.bin+"（"+sh.driver+"）を締めます",
-    body:"3cm "+a+"個　5cm "+b+"個　計 "+(a+b)+"個\n締め時刻 "+hhmm(Date.now())+
+  const base=(a2,b2)=>"3cm "+a2+"個　5cm "+b2+"個　計 "+(a2+b2)+"個\n締め時刻 "+hhmm(Date.now())+
          "\n\n"+dest+"に電話を入れてから向かってください。"+((SET.postTel||"").trim()?"\n"+SET.postTel:"")+
-         "\n締めた後の画面にある「局へ発信」から掛けられます。",
-    okText:"締める",
-    onOk:()=>{ sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0); beep(880,120,.06); openSummary(); showView(); }});
+         "\n締めた後の画面にある「局へ発信」から掛けられます。";
+
+  if(later.length){
+    const a2=a-later.filter(d=>d.size===3).length, b2=b-later.filter(d=>d.size===5).length;
+    alarm();
+    ask({title:"他のドライバーと重複しています",
+      body:later.length+"件が先に読み取られています。\n"+
+        later.slice(0,8).map(d=>fmt(d.no)+"　先： "+d.other.driver+"（"+d.other.bin+"）"+hms(d.other.ts)).join("\n")+
+        (later.length>8?"\nほか "+(later.length-8)+"件":"")+
+        "\n\nこの便から差し引いて締めます。\n"+base(a2,b2),
+      okText:"差し引いて締める",danger:true,
+      onOk:()=>{
+        const now=Date.now(), nos=new Set(later.map(d=>d.no));
+        S.delLog=S.delLog||[];
+        sh.scans.filter(x=>nos.has(x.no)).forEach(x=>S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"他ドライバーと重複"}));
+        sh.scans=sh.scans.filter(x=>!nos.has(x.no));
+        sh.c3=sh.scans.filter(x=>x.size===3).length; sh.c5=sh.scans.length-sh.c3;
+        seenIdx=null;
+        doClose(sh);
+      }});
+    return;
+  }
+  if(earlier.length){
+    ask({title:"他のドライバーと重複しています",
+      body:earlier.length+"件が、後から他のドライバーにも読まれています。\n"+
+        earlier.slice(0,8).map(d=>fmt(d.no)+"　後： "+d.other.driver+"（"+d.other.bin+"）"+hms(d.other.ts)).join("\n")+
+        (earlier.length>8?"\nほか "+(earlier.length-8)+"件":"")+
+        "\n\nこの便は先に読んでいるため、そのまま締めます。\n相手が締めるときに差し引かれます。\n\n"+base(a,b),
+      okText:"締める",onOk:()=>doClose(sh)});
+    return;
+  }
+  ask({title:sh.bin+"（"+sh.driver+"）を締めます",
+    body:(res.ok?"":"※通信できないため、他のドライバーとの重複は確認できていません。\n\n")+base(a,b),
+    okText:"締める",onOk:()=>doClose(sh)});
 };
 $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
 
