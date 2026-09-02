@@ -369,9 +369,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <button class="btn wide" id="btnSavePost">発信先を保存する</button>
     <p class="note" id="setPostMsg">保存すると全端末のドライバー画面に反映されます。</p>
 
-    <h3>本日のデータ</h3>
-    <button class="btn wide danger" id="btnWipeToday">本日のデータを全消去する</button>
-    <p class="note">テストで作った便を片付けるためのものです。本日の便・読取・記録がすべて消えます。過去日は消えません。</p>
+    <h3>選択した日のデータ</h3>
+    <button class="btn wide danger" id="btnWipeToday">この日のデータを全消去する</button>
+    <p class="note">テストで作った便を片付けるためのものです。上で選んだ日の便・読取・記録・写真が、全端末分すべて消えます。</p>
 
     <h3>社内用（記録の追跡まで含む）</h3>
     <button class="btn wide dim" id="btnExpDay">この日を全部書き出す</button>
@@ -752,7 +752,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.39";
+const APP_VER="2026-09-02.40";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1209,7 +1209,15 @@ $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締め
 
 /* ---------- 集計 ---------- */
 let sumWho=null;   // null=全員 / それ以外は driverId または氏名
+const gone=new Map();                      // 削除直後の便がサーバーから読み戻るのを防ぐ
+function markGone(k){ gone.set(k,Date.now()); }
+function isGone(k){
+  const t=gone.get(k); if(!t) return false;
+  if(Date.now()-t>30000){ gone.delete(k); return false; }
+  return true;
+}
 async function fbDeleteShift(day,sh){
+  markGone(keyOf(sh));
   try{ await fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
   try{ await fetch(FB_URL+"/nikki/jet_scan_nos/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
 }
@@ -1236,7 +1244,7 @@ async function fetchDayAll(){
   try{
     const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"); const v=await r.json();
     if(v&&typeof v==="object"){
-      Object.values(v).forEach(j=>{ if(!j||!j.key) return;
+      Object.values(v).forEach(j=>{ if(!j||!j.key||isGone(j.key)) return;
         map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
           scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
           c3:j.c3||0,c5:j.c5||0,
@@ -1390,7 +1398,7 @@ async function fetchDayMerged(date){
   try{
     const r=await fetch(FB_URL+"/nikki/jet_scan/"+date+".json"); const v=await r.json();
     if(v&&typeof v==="object") Object.values(v).forEach(j=>{
-      if(!j||!j.key) return;
+      if(!j||!j.key||isGone(j.key)) return;
       map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
         scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
         c3:j.c3||0,c5:j.c5||0,
@@ -1702,7 +1710,7 @@ $("detDelete").onclick=()=>{
     body:day.date+"　読取 "+n+"件\nこの便は記録から消え、計上からも外れます。",
     okText:"削除に進む",danger:true,
     onOk:()=>{ ask({title:"本当に削除しますか",body:"元に戻せません。削除の記録にだけ残ります。",okText:"削除を実行する",danger:true,
-      onOk:()=>{
+      onOk:async()=>{
         const now=Date.now();
         const local=(day.date===S.date)?S:admArchive.find(d=>d.date===day.date);
         if(local){
@@ -1712,7 +1720,7 @@ $("detDelete").onclick=()=>{
         }
         day.shifts=day.shifts.filter(x=>x!==sh);
         if(day.date===S.date){ if(S.active>=0&&!S.shifts[S.active]) S.active=-1; seenIdx=null; save(); } else { writeArchive(admArchive); }
-        fbDeleteShift(day,sh);
+        await fbDeleteShift(day,sh);
         closeSheets(); openAdmin();
         notify("便を削除しました",sh.bin+"（"+sh.driver+"）を削除の記録に残しました。");
         if(day.date===S.date) showView();
@@ -1821,13 +1829,26 @@ $("btnSavePost").onclick=async()=>{
   $("setPostMsg").style.color=ok?"#1D6B45":"#A8231C";
   paintCall();
 };
+async function wipeDate(date){
+  if(admCurDay&&admCurDay.date===date) admCurDay.shifts.forEach(sh=>markGone(keyOf(sh)));
+  for(const node of ["jet_scan","jet_scan_nos","jet_photos"]){
+    try{ await fetch(FB_URL+"/nikki/"+node+"/"+date+".json",{method:"DELETE"}); }catch(e){}
+  }
+  if(date===S.date){ S=blank(); seenIdx=null; save(); }
+  else { admArchive=readArchive().filter(d=>d.date!==date); writeArchive(admArchive); }
+}
 $("btnWipeToday").onclick=()=>{
   if(!isStaff) return;
-  const n=S.shifts.length;
+  const date=admDate, n=admCurDay?admCurDay.shifts.length:0;
   if(!n){ notify("消すデータがありません",""); return; }
-  ask({title:"本日のデータを全消去します",body:"便 "+n+"件と、その読取・記録がすべて消えます。\n元に戻せません。",okText:"消去する",danger:true,
-    onOk:()=>{ ask({title:"本当に消去しますか",body:"",okText:"消去を実行する",danger:true,
-      onOk:()=>{ S=blank(); save(); closeSheets(); showView(); notify("本日のデータを消去しました",""); }}); }});
+  ask({title:date+" のデータを全消去します",body:"便 "+n+"件と、その読取・記録・写真がすべて消えます。\n全端末分が対象です。元に戻せません。",okText:"消去する",danger:true,
+    onOk:()=>{ ask({title:"本当に消去しますか",body:date+" のデータを消去します。",okText:"消去を実行する",danger:true,
+      onOk:async()=>{
+        await wipeDate(date);
+        if(date===S.date) showView();
+        renderAdmin();
+        notify(date+" のデータを消去しました","");
+      }}); }});
 };
 $("btnExpAll").onclick=async()=>{
   if(!isStaff) return;
