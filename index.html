@@ -122,6 +122,7 @@ footer .btn{flex:1}
 #lockView .lc{font-size:56px;font-weight:800;margin-top:22px;line-height:1}
 #lockView .lcs{font-size:13px;color:var(--ink-2);margin-top:4px}
 #unlock{margin-top:34px;position:relative;overflow:hidden;border:1px solid #B9C3CD;background:#F6F8FA;
+  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   border-radius:10px;padding:18px 26px;font-size:16px;font-weight:700;color:var(--ink);font-family:inherit}
 #unlock .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#C8D8E8}
 #unlock span.t{position:relative}
@@ -520,6 +521,15 @@ function stripOldArchive(){
     return changed;
   }catch(e){ return false; }
 }
+let saveT=null, saveLast=0;
+function saveSoon(){                        // 読取のたびの保存を最大250msに1回へ
+  const now=Date.now();
+  if(now-saveLast>250){ saveLast=now; save(); return; }
+  if(saveT) return;
+  saveT=setTimeout(()=>{ saveT=null; saveLast=Date.now(); save(); },250);
+}
+["pagehide","blur"].forEach(ev=>window.addEventListener(ev,()=>{ if(saveT){ clearTimeout(saveT); saveT=null; } save(); }));
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") save(); });
 let saveWarned=false;
 function save(){
   try{ localStorage.setItem(KEY,JSON.stringify(S)); }
@@ -742,7 +752,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.36";
+const APP_VER="2026-09-02.38";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -811,12 +821,14 @@ function handle(raw){
 function commit(no){
   const size=mode3?3:5;
   seenIdx&&seenIdx.set(no,true);
-  cur().scans.push({no:no,size:size,ts:Date.now()});
-  save(); markDirty(cur());
-  setBand("ok",size+"cm で登録",fmt(no),"この便 "+cur().scans.length+"件");
+  const sh=cur();
+  sh.scans.push({no:no,size:size,ts:Date.now()});
+  if(size===3) sh.c3=(sh.c3||0)+1; else sh.c5=(sh.c5||0)+1;
+  saveSoon(); markDirty(sh);
+  setBand("ok",size+"cm で登録",fmt(no),"この便 "+sh.scans.length+"件");
   beep(size===5?1180:900,size===5?110:60,.06);
   buzz(size===5?[40,40,40]:25);
-  render();
+  renderSoon();
 }
 function showDup(no,first){
   if(locked) setLock(false);
@@ -922,10 +934,15 @@ $("btnStart").onclick=()=>{
 $("btnSumFromStart").onclick=openSummary;
 
 /* ---------- 描画 ---------- */
+let renderQ=false;
+function renderSoon(){                      // 連続読取時は描画をまとめて1回に
+  if(renderQ) return; renderQ=true;
+  requestAnimationFrame(()=>{ renderQ=false; render(); });
+}
 function render(){
   if(!inScan()){ showView(); return; }
   const sh=cur();
-  const c3=sh.scans.filter(x=>x.size===3).length, c5=sh.scans.filter(x=>x.size===5).length;
+  const cc=cnt(sh), c3=cc.a, c5=cc.b;
   $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
   $("hBin").textContent=sh.bin;
   $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt);
@@ -980,6 +997,7 @@ function removeScans(items,kind){
   const nos=new Set(items.map(x=>x.no));
   items.forEach(x=>S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:kind}));
   sh.scans=sh.scans.filter(x=>!nos.has(x.no));
+  sh.c3=sh.scans.filter(x=>x.size===3).length; sh.c5=sh.scans.length-sh.c3;
   seenIdx=null;
   sel.clear(); save(); markDirty(sh); render();
 }
@@ -1068,16 +1086,27 @@ function notifyLocked(){
   lockWarnT=setTimeout(()=>{ lockWarnT=null; paintLock(); },2500);
 }
 (function(){
-  const b=$("unlock"), f=$("ufill"); let t0=0,raf=null;
+  const b=$("unlock"), f=$("ufill"); let t0=0,raf=null,holding=false;
   const step=()=>{
+    if(!holding) return;
     const p=Math.min(1,(Date.now()-t0)/1200);
     f.style.width=(p*100)+"%";
-    if(p>=1){ stop(); setLock(false); beep(880,70,.05); }
+    if(p>=1){ stop(); setLock(false); beep(880,70,.05); buzz(40); }
     else raf=requestAnimationFrame(step);
   };
-  const stop=()=>{ if(raf)cancelAnimationFrame(raf); raf=null; f.style.width="0"; };
-  b.addEventListener("pointerdown",e=>{ e.preventDefault(); t0=Date.now(); raf=requestAnimationFrame(step); });
-  ["pointerup","pointercancel","pointerleave"].forEach(ev=>b.addEventListener(ev,stop));
+  const start=e=>{
+    if(holding) return;
+    if(e.cancelable) e.preventDefault();
+    holding=true; t0=Date.now();
+    try{ if(e.pointerId!=null&&b.setPointerCapture) b.setPointerCapture(e.pointerId); }catch(err){}
+    raf=requestAnimationFrame(step);
+  };
+  const stop=()=>{ holding=false; if(raf)cancelAnimationFrame(raf); raf=null; f.style.width="0"; };
+  b.addEventListener("pointerdown",start);
+  b.addEventListener("touchstart",start,{passive:false});
+  b.addEventListener("mousedown",start);
+  ["pointerup","pointercancel","touchend","touchcancel","mouseup"].forEach(ev=>b.addEventListener(ev,stop));
+  window.addEventListener("pointerup",stop); window.addEventListener("mouseup",stop);
 })();
 
 /* ---------- リーダー入力 ---------- */
@@ -1416,7 +1445,9 @@ function markExported(day,shifts){
 }
 const cnt=sh=>{
   if(!Array.isArray(sh.scans)||sh._stripped) return {a:sh.c3||0,b:sh.c5||0};
-  return {a:sh.scans.filter(x=>x.size===3).length,b:sh.scans.filter(x=>x.size===5).length};
+  if(typeof sh.c3==="number"&&typeof sh.c5==="number"&&sh.c3+sh.c5===sh.scans.length) return {a:sh.c3,b:sh.c5};
+  const a=sh.scans.filter(x=>x.size===3).length, b=sh.scans.length-a;
+  sh.c3=a; sh.c5=b; return {a:a,b:b};
 };
 
 $("btnAdmin").onclick=()=>{
