@@ -21,7 +21,7 @@
   --ok:#1D6B45; --ok-bg:#D8EEE2; --lock:#E3E7EC;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;overflow-x:hidden;overscroll-behavior-y:none}
 body{
   background:var(--bg);color:var(--ink);
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
@@ -127,7 +127,15 @@ footer .btn{flex:1}
   border-radius:14px 14px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
   max-height:88dvh;overflow-y:auto;display:none}
 .sheet.on{display:block}
-.sheet.full{top:0;border-radius:0;max-height:none;padding-top:calc(14px + env(safe-area-inset-top))}
+.sheet{overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.listwrap{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;overflow-x:hidden}
+.sheet.full{top:0;border-radius:0;max-height:none;padding-top:calc(8px + env(safe-area-inset-top))}
+input[type="date"]{text-align:center}
+input[type="date"]::-webkit-date-and-time-value{text-align:center}
+.sheethead{position:sticky;top:0;background:var(--bg);z-index:6;display:flex;align-items:center;gap:8px;
+  padding:6px 0 10px;margin:0 0 6px;border-bottom:1px solid var(--line)}
+.sheethead .ttl{flex:1;font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheethead .btn{flex:0 0 auto}
 .admrow{border:1px solid #B9C7D6;box-shadow:0 1px 0 rgba(18,33,46,.06)}
 .admrow:active{background:var(--blue-bg);border-color:var(--blue)}
 .admrow .chev{flex:0 0 auto;color:var(--blue);font-size:22px;font-weight:700;line-height:1;padding-left:4px}
@@ -327,7 +335,10 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <!-- 集計 -->
 <!-- 管理画面 -->
 <div class="sheet full" id="shAdmin">
-  <h2>管理画面</h2>
+  <div class="sheethead">
+    <button class="btn sm dim" data-close>戻る</button>
+    <span class="ttl">管理画面</span>
+  </div>
   <div class="field"><label for="admDate">日付</label>
     <input id="admDate" type="date" style="width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF">
     <p class="note" id="admDateNote"></p></div>
@@ -362,12 +373,12 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 
 <!-- 便の明細 -->
 <div class="sheet full" id="shDetail">
-  <h2 id="detTitle">便の明細</h2>
-  <div id="detMeta"></div>
-  <div class="actbar">
-    <button class="btn dim" id="detBack">一覧に戻る</button>
-    <button class="btn primary" id="detSub">CSV書き出し</button>
+  <div class="sheethead">
+    <button class="btn sm dim" id="detBack">戻る</button>
+    <span class="ttl" id="detTitle">便の明細</span>
+    <button class="btn sm primary" id="detSub">CSV書き出し</button>
   </div>
+  <div id="detMeta"></div>
   <h3>読取</h3>
   <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
   <div class="sep"></div>
@@ -389,7 +400,10 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 
 <!-- 回収資料の写真提出 -->
 <div class="sheet" id="shPhoto">
-  <h2>回収資料の写真提出</h2>
+  <div class="sheethead">
+    <button class="btn sm dim" data-close>戻る</button>
+    <span class="ttl">回収資料の写真提出</span>
+  </div>
   <div class="field"><label for="phShift">どの便の資料ですか</label><select class="day" id="phShift"></select></div>
   <div id="phList"><p class="note">写真なし</p></div>
   <input type="file" id="phFile" accept="image/*" capture="environment" class="hide">
@@ -399,7 +413,10 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 </div>
 
 <div class="sheet" id="shSum">
-  <h2>本日の集計</h2>
+  <div class="sheethead">
+    <button class="btn sm dim" data-close>戻る</button>
+    <span class="ttl">本日の集計</span>
+  </div>
   <button class="btn wide" id="btnCallSum">局へ発信</button>
   <div class="field"><select class="day" id="sumWho"></select></div>
   <table id="sumTable"><thead><tr><th>便 / ドライバー</th><th>3cm</th><th>5cm</th><th>合計</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
@@ -666,7 +683,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 setInterval(()=>{ scheduleSync(0); },60000);
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-01.24";
+const APP_VER="2026-09-02.25";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
