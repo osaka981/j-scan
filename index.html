@@ -130,7 +130,7 @@ footer .btn{flex:1}
 .sheet{overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .listwrap{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;overflow-x:hidden}
 .sheet.full{top:0;border-radius:0;max-height:none;padding-top:calc(8px + env(safe-area-inset-top))}
-input[type="date"]{text-align:center}
+input[type="date"]{text-align:center;width:100%;max-width:100%;min-width:0;box-sizing:border-box;display:block;-webkit-appearance:none;appearance:none}
 input[type="date"]::-webkit-date-and-time-value{text-align:center}
 .sheethead{position:sticky;top:0;background:var(--bg);z-index:6;display:flex;align-items:center;gap:8px;
   padding:6px 0 10px;margin:0 0 6px;border-bottom:1px solid var(--line)}
@@ -340,7 +340,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <span class="ttl">管理画面</span>
   </div>
   <div class="field"><label for="admDate">日付</label>
-    <input id="admDate" type="date" style="width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF">
+    <input id="admDate" type="date" style="padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF">
     <p class="note" id="admDateNote"></p></div>
   <div id="admSummary"></div>
   <h3>便の一覧</h3>
@@ -683,7 +683,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 setInterval(()=>{ scheduleSync(0); },60000);
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.25";
+const APP_VER="2026-09-02.26";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1301,6 +1301,8 @@ function openAdmin(){
   renderAdmin(); openSheet("shAdmin");
 }
 $("admDate").onchange=()=>{ admDate=$("admDate").value||S.date; renderAdmin(); };
+$("admDate").addEventListener("click",function(){ try{ this.showPicker&&this.showPicker(); }catch(e){} });
+$("admDate").addEventListener("focus",function(){ try{ this.showPicker&&this.showPicker(); }catch(e){} });
 $("btnAdmLogout").onclick=()=>{ adminOK=false; isStaff=false; closeSheets(); notify("ログアウトしました","次回は暗証番号の入力から始まります。"); };
 // 管理画面は操作が15分止まったら自動ログアウト（共用端末で開きっぱなし対策）
 let admLast=Date.now();
