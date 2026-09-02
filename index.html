@@ -742,7 +742,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.35";
+const APP_VER="2026-09-02.36";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1081,24 +1081,26 @@ function notifyLocked(){
 })();
 
 /* ---------- リーダー入力 ---------- */
-// リーダーは1文字ずつが高速（50ms以下）で届く。手入力とは速さで判別する。
-let buf="", bufT=0, fastN=0;
+// 通常時は速度を問わず受け付ける。入力欄にカーソルがあるときだけ、
+// 「打ち終えるまでの合計時間」でリーダー（速い）と手入力（遅い）を区別する。
+let buf="", bufT=0, bufStart=0;
 document.addEventListener("keydown",e=>{
   const el=document.activeElement;
   const inField=!!(el&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
-  const now=Date.now(), gap=now-bufT;
-  if(gap>400){ buf=""; fastN=0; }
+  const now=Date.now();
+  if(now-bufT>800){ buf=""; bufStart=now; }
   bufT=now;
 
   if(e.key==="Enter"||e.key==="Tab"){
-    const isReader=buf.length>=6&&fastN>=Math.min(4,buf.length-1);
-    if(!isReader){ buf=""; fastN=0; return; }          // 人の入力はそのまま各欄に任せる
+    const code=buf; const dur=now-bufStart; buf="";
+    if(code.length<6) return;
+    // 欄にカーソルがある場合のみ速度で判定（1文字あたり120ms以内ならリーダー）
+    if(inField && dur > code.length*120) return;       // 手で打った分は各欄に任せる
     e.preventDefault();
-    const code=buf; buf=""; fastN=0;
-    if(inField){                                       // 欄に紛れ込んだ分を消してカーソルを外す
-      try{ el.value=el.value.replace(code,""); el.blur(); }catch(err){}
+    if(inField){
+      try{ el.value=el.value.split(code).join(""); el.blur(); }catch(err){}
       if(el.id==="hisSearch"||el.id==="detSearch"){ try{ el.value=""; }catch(err){} }
-      render();
+      if(el.id==="hisSearch") render();
     }
     if(sheetOpen||askOpen||!inScan()) return;
     handle(code);
@@ -1106,7 +1108,7 @@ document.addEventListener("keydown",e=>{
     return;
   }
   if(e.key.length===1){
-    if(gap<=50&&buf.length) fastN++;
+    if(!buf) bufStart=now;
     buf+=e.key; if(buf.length>40){ buf=buf.slice(-40); }
   }
 });
