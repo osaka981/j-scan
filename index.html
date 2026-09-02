@@ -338,6 +338,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div class="sheethead">
     <button class="btn sm dim" data-close>戻る</button>
     <span class="ttl">管理画面</span>
+    <button class="btn sm dim" id="btnAdmLogout">ログアウト</button>
   </div>
   <div class="field"><label for="admDate">日付</label>
     <input id="admDate" type="date" style="padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF">
@@ -367,7 +368,6 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <button class="btn wide dim" id="btnExpAll">全期間を書き出す</button>
     <p class="note">二度読みの検知や電話番号まで含みます。先方に渡すものではありません。</p>
   </div>
-  <button class="btn wide dim" id="btnAdmLogout">管理画面からログアウト</button>
   <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
 </div>
 
@@ -683,7 +683,7 @@ document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==
 setInterval(()=>{ scheduleSync(0); },60000);
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.26";
+const APP_VER="2026-09-02.27";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1300,9 +1300,8 @@ function openAdmin(){
   updateDateNote();
   renderAdmin(); openSheet("shAdmin");
 }
-$("admDate").onchange=()=>{ admDate=$("admDate").value||S.date; renderAdmin(); };
-$("admDate").addEventListener("click",function(){ try{ this.showPicker&&this.showPicker(); }catch(e){} });
-$("admDate").addEventListener("focus",function(){ try{ this.showPicker&&this.showPicker(); }catch(e){} });
+$("admDate").onchange=function(){ admDate=this.value||S.date; this.blur(); renderAdmin(); };
+$("admDate").addEventListener("click",function(){ try{ if(this.showPicker&&!("ontouchstart" in window)) this.showPicker(); }catch(e){} });
 $("btnAdmLogout").onclick=()=>{ adminOK=false; isStaff=false; closeSheets(); notify("ログアウトしました","次回は暗証番号の入力から始まります。"); };
 // 管理画面は操作が15分止まったら自動ログアウト（共用端末で開きっぱなし対策）
 let admLast=Date.now();
