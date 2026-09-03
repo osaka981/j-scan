@@ -640,7 +640,7 @@ const MKEY="jet-master-v1";
 let MASTER=null;   // {drivers:[], companies:[], at}
 function asArr(v){ return Array.isArray(v)?v.filter(Boolean):(v?Object.values(v).filter(Boolean):[]); }
 async function loadMaster(force){
-  if(!force){ try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c&&Date.now()-c.at<6*3600*1000){ MASTER=c; return c; } }catch(e){} }
+  if(!force){ try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c&&Date.now()-c.at<30*60*1000){ MASTER=c; return c; } }catch(e){} }
   try{
     const [d,c]=await Promise.all([
       fetch(FB_URL+"/nikki/drivers.json").then(r=>r.json()),
@@ -678,7 +678,12 @@ async function resolveId(){
   idState={kind:"",name:""};
   if(!normId(raw)){ msg.textContent=""; return; }
   if(!MASTER){ msg.textContent="登録データを読み込み中"; await loadMaster(false); }
-  const d=findDriver(raw);
+  let d=findDriver(raw);
+  if(d&&!d.tel){                       // 電話番号が未反映のときは最新を取り直す
+    msg.textContent="登録データを更新中";
+    await loadMaster(true);
+    d=findDriver(raw)||d;
+  }
   if(d){
     $("sDrv").value=d.name; if(d.tel) $("sTel").value=d.tel;
     $("sId").value=canonId(raw);
@@ -781,7 +786,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-03.49";
+const APP_VER="2026-09-03.50";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
