@@ -770,7 +770,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-02.46";
+const APP_VER="2026-09-03.47";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1723,14 +1723,17 @@ function shrinkImage(file,longEdge,quality){
 }
 let phSh=null, phPhotos={}, phDate=null, phList=[];
 function photoPathFor(date,sh){ return FB_URL+"/nikki/jet_photos/"+date+"/"+keyOf(sh); }
+const yesterday=()=>{ const d=new Date(); d.setDate(d.getDate()-1);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 function openPhotoSheet(){
-  phDate=$("phDate").value||S.date;
+  phDate=$("phDate").value||yesterday();
   $("phDate").value=phDate;
   openSheet("shPhoto");
   loadPhShifts();
   fetchRemoteDates().then(()=>{
     const set=new Set(admRemoteDates); set.add(S.date);
-    $("phDateNote").textContent="記録のある日："+Array.from(set).sort().reverse().slice(0,10).join("、");
+    const txt="記録のある日："+Array.from(set).sort().reverse().slice(0,10).join("、");
+    if(!/記録がありません/.test($("phDateNote").textContent)) $("phDateNote").textContent=txt;
   });
 }
 async function loadPhShifts(){
@@ -1738,20 +1741,18 @@ async function loadPhShifts(){
   sel.innerHTML='<option>読み込み中</option>';
   $("phList").innerHTML='<p class="note">読み込み中</p>';
   const day=await fetchDayMerged(phDate);
-  phList=day.shifts.slice();
-  if(!phList.length){
-    sel.innerHTML='<option value="">この日の便がありません</option>';
-    phSh=null; $("phList").innerHTML='<p class="note">日付を選び直してください</p>';
-    $("phTake").disabled=true; return;
-  }
+  // 便がない日（アプリを使わず回収した日）は「ドライバーなし」として提出できる
+  const NOSHIFT={bin:"ドライバーなし",driver:"",_key:"noshift",_noshift:true};
+  phList=day.shifts.concat([NOSHIFT]);
   $("phTake").disabled=false;
-  // 開始画面に入っている人の便を優先して初期選択
   const curId=normId($("sId").value||"");
-  const mine=phList.filter(sh=>curId&&sh.driverId&&normId(sh.driverId)===curId);
-  phSh=(mine.length?mine[mine.length-1]:phList[phList.length-1]);
+  const mine=day.shifts.filter(sh=>curId&&sh.driverId&&normId(sh.driverId)===curId);
+  phSh=(mine.length?mine[mine.length-1]:(day.shifts.length?day.shifts[day.shifts.length-1]:NOSHIFT));
   sel.innerHTML=phList.map((sh,i)=>'<option value="'+i+'"'+(sh===phSh?" selected":"")+">"+
-    (sh.driver||"")+"　"+sh.bin+(sh.closed?"（締め "+hhmm(sh.closedAt)+"）":"（計数中）")+"</option>").join("");
+    (sh._noshift?"ドライバーなし（便の記録なし）"
+      :(sh.driver||"")+"　"+sh.bin+(sh.closed?"（締め "+hhmm(sh.closedAt)+"）":"（計数中）"))+"</option>").join("");
   sel.onchange=()=>{ phSh=phList[parseInt(sel.value,10)]||phSh; loadPhPhotos(); };
+  if(!day.shifts.length) $("phDateNote").textContent="この日は計数の記録がありません。「ドライバーなし」として提出できます。";
   loadPhPhotos();
 }
 $("phDate").onchange=function(){ phDate=this.value||S.date; this.blur(); loadPhShifts(); };
@@ -1784,11 +1785,13 @@ $("phFile").onchange=async e=>{
   try{
     const full=await shrinkImage(f,1400,.62), thumb=await shrinkImage(f,240,.6);
     const id="p"+Date.now();
-    const body={full:full,thumb:thumb,at:Date.now(),by:"driver",date:phDate,bin:phSh.bin,driver:phSh.driver||"",driverId:phSh.driverId||""};
+    const body={full:full,thumb:thumb,at:Date.now(),by:"driver",date:phDate,
+      bin:phSh._noshift?"":phSh.bin,driver:phSh.driver||"",driverId:phSh.driverId||"",
+      noShift:!!phSh._noshift};
     const r=await fetch(photoPathFor(phDate,phSh)+"/"+id+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!r.ok) throw new Error("save");
     phPhotos[id]={thumb:thumb,at:body.at}; paintPhPhotos(); beep(880,80,.05);
-    notify("提出しました",phDate+"　"+(phSh.driver||"")+"　"+phSh.bin+" の資料として保存しました。");
+    notify("提出しました",phDate+"　"+(phSh._noshift?"ドライバーなし":(phSh.driver||"")+"　"+phSh.bin)+" の資料として保存しました。");
   }catch(err){ notify("保存できませんでした","電波を確認して、もう一度撮影してください。"); }
   $("phTake").disabled=false; $("phTake").textContent="撮影して提出する";
 };
