@@ -409,6 +409,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
   <div class="sep"></div>
   <div id="detScans"></div>
+  <h3>回収資料の写真</h3>
+  <div id="detPhotos"><p class="note">読み込み中</p></div>
+
   <div id="detInternal">
     <div id="detDelWrap">
     <h3>この便の削除</h3>
@@ -437,7 +440,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div id="phList"><p class="note">写真なし</p></div>
   <input type="file" id="phFile" accept="image/*" capture="environment" class="hide">
   <button class="btn wide photo" id="phTake">撮影して提出する</button>
-  <p class="note">差出票など、郵便局で受け取った書類を撮影してください。前日以前の分も、日付とドライバー・便を選べば提出できます。提出した写真は弊社の管理システムで確認します。</p>
+  <p class="note">差出票など、郵便局で受け取った書類を撮影してください。前日以前の分も、日付とドライバー・便を選べば提出できます。ご自身が本日提出した分は、業務終了までは取り消して撮り直せます。</p>
   <button class="btn wide dim" data-close>閉じる</button>
 </div>
 
@@ -786,7 +789,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-03.50";
+const APP_VER="2026-09-03.52";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1780,15 +1783,52 @@ async function loadPhPhotos(){
   try{ const r=await fetch(photoPathFor(phDate,phSh)+".json"); const v=await r.json(); if(v&&typeof v==="object") phPhotos=v; }catch(e){}
   paintPhPhotos();
 }
+function submitterId(){
+  const t=normId($("sId").value||"");
+  if(t) return canonId(t);
+  const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  return last&&last.driverId?canonId(last.driverId):"";
+}
+function submitterName(){
+  const n=($("sDrv").value||"").trim();
+  if(n) return n;
+  const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  return last?(last.driver||""):"";
+}
+// 本人が、提出したその日の業務終了までなら閲覧・差し替えできる
+function canEditPhoto(v){
+  if(!v) return false;
+  const me=submitterId();
+  if(!me||!v.byId||canonId(v.byId)!==me) return false;   // 提出者本人のみ
+  if((v.byDate||"")!==S.date) return false;               // 提出した当日のみ
+  const ended=(S.ends||[]).some(e=>{
+    const n=(e.driver||"").trim();
+    return n&&n===submitterName()&&e.ts>(v.at||0);        // 業務終了後は不可
+  });
+  return !ended;
+}
 function paintPhPhotos(){
-  const el=$("phList"); const keys=Object.keys(phPhotos).sort();
-  el.innerHTML=keys.length?'<div class="chips">'+keys.map(k=>
-    '<span class="chip" style="padding:4px"><img src="'+(phPhotos[k].thumb||"")+'" style="height:72px;border-radius:4px;display:block">'+
-    '<button data-ph="'+k+'" style="color:#A8231C;font-weight:700">×</button></span>').join("")+"</div>"+
-    '<p class="note">'+keys.length+"枚 提出済み</p>":'<p class="note">写真なし</p>';
-  el.querySelectorAll("[data-ph]").forEach(b=>b.onclick=()=>{
-    const k=b.getAttribute("data-ph");
-    ask({title:"この写真を取り消します",body:"",okText:"取り消す",danger:true,onOk:async()=>{
+  const el=$("phList");
+  const keys=Object.keys(phPhotos).sort();
+  if(!keys.length){ el.innerHTML='<p class="note">まだ提出がありません</p>'; return; }
+  const mine=keys.filter(k=>canEditPhoto(phPhotos[k]));
+  const other=keys.length-mine.length;
+  el.innerHTML=(mine.length?'<div class="chips">'+mine.map(k=>
+      '<span class="chip" style="padding:4px"><img data-ph="'+k+'" src="'+(phPhotos[k].thumb||"")+'" style="height:80px;border-radius:4px;display:block;cursor:pointer">'+
+      '<button data-del="'+k+'" style="color:#A8231C;font-weight:700">×</button></span>').join("")+"</div>":"")+
+    '<p class="note">提出済み '+keys.length+"枚"+
+      (mine.length?"　うち"+mine.length+"枚は本日ご自身が提出した分です。押すと拡大、×で取り消して撮り直せます。":"")+
+      (other?"　"+other+"枚は他の方の提出、または前日以前の提出のため表示しません（管理画面で確認します）。":"")+"</p>";
+  el.querySelectorAll("[data-ph]").forEach(im=>im.onclick=()=>{
+    const v=phPhotos[im.getAttribute("data-ph")];
+    const ov=document.createElement("div");
+    ov.style.cssText="position:fixed;inset:0;background:rgba(12,20,28,.9);z-index:120;display:flex;align-items:center;justify-content:center;padding:12px";
+    ov.innerHTML='<img src="'+(v.full||v.thumb)+'" style="max-width:96vw;max-height:88vh;border-radius:6px;background:#fff">';
+    ov.onclick=()=>ov.remove(); document.body.appendChild(ov);
+  });
+  el.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    const k=b.getAttribute("data-del");
+    ask({title:"この写真を取り消します",body:"取り消したあと、撮り直して提出できます。",okText:"取り消す",danger:true,onOk:async()=>{
       try{ await fetch(photoPathFor(phDate,phSh)+"/"+k+".json",{method:"DELETE"}); }catch(e){}
       delete phPhotos[k]; paintPhPhotos();
     }});
@@ -1804,16 +1844,18 @@ $("phFile").onchange=async e=>{
     const id="p"+Date.now();
     const body={full:full,thumb:thumb,at:Date.now(),by:"driver",date:phDate,
       bin:phSh._noshift?"":phSh.bin,driver:phSh.driver||"",driverId:phSh.driverId||"",
-      noShift:!!phSh._noshift};
+      noShift:!!phSh._noshift,
+      byId:submitterId(), byName:submitterName(), byDate:S.date};
     const r=await fetch(photoPathFor(phDate,phSh)+"/"+id+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
     if(!r.ok) throw new Error("save");
-    phPhotos[id]={thumb:thumb,at:body.at}; paintPhPhotos(); beep(880,80,.05);
+    phPhotos[id]={thumb:thumb,full:full,at:body.at,byId:body.byId,byDate:body.byDate}; paintPhPhotos(); beep(880,80,.05);
     notify("提出しました",phDate+"　"+(phSh._noshift?"ドライバーなし":(phSh.driver||"")+"　"+phSh.bin)+" の資料として保存しました。");
   }catch(err){ notify("保存できませんでした","電波を確認して、もう一度撮影してください。"); }
   $("phTake").disabled=false; $("phTake").textContent="撮影して提出する";
 };
 function openDayDetail(day){
   detCur={day:day,sh:null,all:true};
+  loadDetPhotos(day.date,null);
   $("detInternal").className=isStaff?"":"hide";
   $("detDelWrap").className="hide";
   let t3=0,t5=0; day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; });
@@ -1834,8 +1876,27 @@ function openDayDetail(day){
     '<span class="tag tag'+d.size+'">'+d.size+'cm</span><br><span style="font-size:12px;color:#4A5B6B">'+d.bin+"　"+d.kind+" "+hms(d.delTs)+"</span></span></div>").join(""):'<p class="note">なし</p>';
   closeSheets(); openSheet("shDetail");
 }
+async function loadDetPhotos(date,sh){
+  const el=$("detPhotos"); el.innerHTML='<p class="note">読み込み中</p>';
+  let v=null;
+  try{ const r=await fetch(FB_URL+"/nikki/jet_photos/"+date+"/"+(sh?keyOf(sh):"noshift")+".json"); v=await r.json(); }catch(e){}
+  const keys=v&&typeof v==="object"?Object.keys(v).sort():[];
+  el.innerHTML=keys.length?'<div class="chips">'+keys.map(k=>
+      '<span class="chip" style="padding:4px"><img data-full="'+k+'" src="'+(v[k].thumb||"")+'" style="height:80px;border-radius:4px;display:block;cursor:pointer"></span>').join("")+"</div>"+
+      '<p class="note">'+keys.length+"枚</p>"
+    :'<p class="note">提出なし</p>';
+  el.querySelectorAll("[data-full]").forEach(im=>im.onclick=()=>{
+    const k=im.getAttribute("data-full");
+    const ov=document.createElement("div");
+    ov.style.cssText="position:fixed;inset:0;background:rgba(12,20,28,.9);z-index:120;display:flex;align-items:center;justify-content:center;padding:12px";
+    ov.innerHTML='<img src="'+(v[k].full||v[k].thumb)+'" style="max-width:96vw;max-height:88vh;border-radius:6px;background:#fff">';
+    ov.onclick=()=>ov.remove();
+    document.body.appendChild(ov);
+  });
+}
 function openDetail(day,i){
   const sh=day.shifts[i], c=cnt(sh);
+  loadDetPhotos(day.date,sh);
   detCur={day:day,sh:sh};
   $("detInternal").className=isStaff?"":"hide";
   $("detDelWrap").className=isStaff?"":"hide";
