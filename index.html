@@ -134,6 +134,1992 @@ footer .btn{flex:1}
   border-radius:14px 14px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
   max-height:88dvh;overflow-y:auto;display:none}
 .sheet.on{display:block}
+#shDup{top:50%;bottom:auto;transform:translateY(-50%);left:14px;right:14px;border-radius:12px;
+  max-height:82dvh;box-shadow:0 8px 28px rgba(12,20,28,.28);border:1px solid var(--line);
+  padding:16px 16px 18px}
+.sheet{overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.listwrap{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;overflow-x:hidden}
+.sheet.full{top:0;border-radius:0;max-height:none;padding-top:calc(8px + env(safe-area-inset-top))}
+input[type="date"]{text-align:center;width:100%;max-width:100%;min-width:0;box-sizing:border-box;display:block;-webkit-appearance:none;appearance:none}
+input[type="date"]::-webkit-date-and-time-value{text-align:center}
+.sheethead{position:sticky;top:0;background:var(--bg);z-index:6;display:flex;align-items:center;gap:8px;
+  padding:6px 0 10px;margin:0 0 6px;border-bottom:1px solid var(--line)}
+.sheethead .ttl{flex:1;font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheethead .btn{flex:0 0 auto}
+.admrow{border:1px solid #B9C7D6;box-shadow:0 1px 0 rgba(18,33,46,.06)}
+.admrow:active{background:var(--blue-bg);border-color:var(--blue)}
+.admrow .chev{flex:0 0 auto;color:var(--blue);font-size:22px;font-weight:700;line-height:1;padding-left:4px}
+.admrow .hint{font-size:11px;color:var(--blue);font-weight:600;margin-top:2px}
+.sumcard{cursor:pointer}
+.sumcard:active{background:var(--blue-bg) !important}
+.sheet,.listwrap{scrollbar-width:auto;scrollbar-color:#8FA3B8 #E6EBF1}
+.sheet::-webkit-scrollbar,.listwrap::-webkit-scrollbar{width:14px}
+.sheet::-webkit-scrollbar-track,.listwrap::-webkit-scrollbar-track{background:#E6EBF1}
+.sheet::-webkit-scrollbar-thumb,.listwrap::-webkit-scrollbar-thumb{background:#8FA3B8;border-radius:7px;border:3px solid #E6EBF1}
+.sheet::-webkit-scrollbar-thumb:hover,.listwrap::-webkit-scrollbar-thumb:hover{background:#5E7A96}
+.jump{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;padding:8px 0 4px;pointer-events:none;z-index:5}
+.jump button{pointer-events:auto;border:1px solid #B9C7D6;background:var(--card);color:var(--blue);font-weight:700;font-size:14px;
+  border-radius:20px;padding:10px 14px;font-family:inherit;cursor:pointer;box-shadow:0 2px 8px rgba(18,33,46,.15)}
+.jump button:active{background:var(--blue-bg)}
+.actbar{display:flex;gap:8px;margin:0 0 10px}
+.actbar .btn{flex:1;padding:12px 10px;font-size:15px}
+.btn.primary{background:var(--blue-bg);border-color:#8FB4D8;color:var(--blue)}
+.tabs{display:flex;gap:6px;margin:0 0 8px}
+.tabs button{flex:1;border:1px solid var(--line);background:var(--card);color:var(--ink-2);font-weight:700;font-size:14px;
+  border-radius:8px;padding:9px 6px;font-family:inherit;cursor:pointer}
+.tabs button.on3{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.tabs button.on5{border-color:var(--amber);background:var(--amber-bg);color:var(--amber)}
+.tabs button.onall{border-color:var(--ink);background:#E6EBF1;color:var(--ink)}
+.search{width:100%;padding:11px 12px;font-size:17px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF;margin-bottom:0}
+.search:focus{outline:2px solid var(--blue);outline-offset:0}
+.search::placeholder{color:#8A98A6}
+.sep{height:0;border-top:2px solid #B9C7D6;margin:12px 0 10px}
+.sheet h2{font-size:17px;margin:0 0 10px}
+.sheet h3{font-size:13px;color:var(--ink-2);margin:16px 0 6px}
+.alertbox{background:var(--red-bg);border:1px solid #E0A9A3;border-radius:10px;padding:12px;margin-bottom:10px}
+.metabox{background:#FFF;border:1.5px solid #7F94AA;border-radius:10px;padding:12px;margin-bottom:10px}
+.alertbox .an{font-size:22px;font-weight:800;color:var(--red);letter-spacing:.04em}
+.alertbox .ar{font-size:14px;margin-top:8px}
+.alertbox .ar b{font-size:17px}
+table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{padding:7px 9px;font-size:13px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{background:#F2F5F8;font-size:12px;color:var(--ink-2)}
+tr:last-child td{border-bottom:none}
+tfoot td{font-weight:700;background:#F2F5F8}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:13px;font-weight:600;padding:5px 9px;border-radius:6px;border:1px solid var(--line);
+  background:var(--card);display:flex;align-items:center;gap:6px}
+.chip.no{color:var(--red);background:var(--red-bg);border-color:#E0A9A3}
+.chip button{border:none;background:none;font-size:12px;color:var(--ink-2);padding:0 2px;cursor:pointer;font-family:inherit}
+.note{font-size:12px;color:var(--ink-2);margin:6px 2px 0;user-select:text}
+.rowbtns{display:flex;gap:8px}
+.rowbtns .btn{flex:1;margin-top:8px}
+a.tel{color:var(--blue);font-weight:700;text-decoration:none}
+.askscrim{position:fixed;inset:0;background:rgba(12,20,28,.5);z-index:80;display:none}
+.askscrim.on{display:block}
+.askbox{position:fixed;z-index:81;left:14px;right:14px;top:50%;transform:translateY(-50%);
+  background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:16px;
+  display:none;max-height:80dvh;overflow-y:auto;box-shadow:0 8px 28px rgba(12,20,28,.25)}
+.askbox.on{display:block}
+.askbox h2{font-size:17px;margin:0 0 8px}
+.askbox .body{font-size:14px;white-space:pre-line;margin-bottom:12px}
+.lbtns{display:flex;gap:6px;align-items:center;margin:0 2px 8px}
+.lbtns .selinfo{font-size:12px;color:var(--ink-2);font-weight:600;margin-left:auto}
+.btn.danger{color:var(--red);border-color:#E0A9A3;background:var(--red-bg)}
+.row.pick{border-color:var(--blue);background:var(--blue-bg)}
+.row .ck{width:22px;height:22px;border:2px solid #9FB4C7;border-radius:5px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--blue)}
+.row.pick .ck{border-color:var(--blue);background:#BFD6EC}
+.row.del{background:#F1F3F6;border-style:dashed}
+.row.del .no{text-decoration:line-through;color:var(--ink-2)}
+.admrow{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:7px;display:flex;align-items:center;gap:10px;cursor:pointer}
+.admrow .a1{flex:1;min-width:0}
+.admrow .ttl{font-weight:700;font-size:15px}
+.admrow .meta{font-size:12px;color:var(--ink-2);margin-top:2px}
+.admrow .qty{font-size:22px;font-weight:800;letter-spacing:-.01em}
+.badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;border:1px solid;margin-top:4px}
+.b-done{color:var(--ok);background:var(--ok-bg);border-color:#A9D3BE}
+.b-todo{color:var(--warn);background:var(--warn-bg);border-color:#DFC97A}
+.b-open{color:var(--blue);background:var(--blue-bg);border-color:#A9C4E0}
+select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;background:var(--card)}
+</style>
+</head>
+<body>
+
+<!-- ============ 開始画面 ============ -->
+<div id="vStart">
+  <div class="panel">
+    <h1>集荷を始める</h1>
+    <div class="field"><label for="sId">ID</label><input id="sId" type="tel" inputmode="numeric" autocomplete="off">
+      <div class="note" id="sIdMsg" style="margin-top:4px"></div></div>
+    <div class="field"><label for="sBin">便名</label><input id="sBin" type="text" placeholder="第1便"></div>
+    <div class="field"><label for="sDrv">ドライバー名</label><input id="sDrv" type="text" placeholder="氏名"></div>
+    <div class="field"><label for="sTel">電話番号</label><input id="sTel" type="tel" inputmode="tel" placeholder="090-0000-0000"></div>
+    <button class="btn go wide" id="btnStart">集荷スタート</button>
+    <button class="btn wide dim hide" id="btnOther">別のドライバーで始める</button>
+    <div class="prev" id="startPrev"></div>
+  </div>
+  <button class="btn wide photo" id="btnPhoto">回収資料の写真提出</button>
+  <button class="btn wide dim" id="btnSumFromStart">本日の集計を見る</button>
+  <button class="btn wide hide" id="btnResume">計数中の便に戻る</button>
+  <button class="btn wide" id="btnFinish">業務終了</button>
+  <button class="btn wide dim" id="btnAdmin">管理画面</button>
+  <p class="note" id="verNote" style="text-align:center;margin-top:10px"></p>
+</div>
+
+<!-- ============ 計数画面 ============ -->
+<div id="vScan" class="hide" style="display:flex;flex-direction:column;flex:1;min-height:0">
+  <header>
+    <div class="binfo">
+      <div class="bname" id="hBin">第1便</div>
+      <div class="bsub" id="hSub"></div>
+    </div>
+    <span class="bsub" id="syncDot" style="font-size:11px;white-space:nowrap"></span>
+    <button class="btn sm" id="btnCall" title="郵便局へ発信">局へ発信</button>
+    <button class="btn sm dim" id="btnMenu">集計</button>
+    <button class="btn sm dim" id="btnLogout">ログアウト</button>
+  </header>
+
+  <div class="counts">
+    <div class="cbox t3"><div class="lab">3cm</div><div class="val num" id="c3">0</div></div>
+    <div class="cbox t5"><div class="lab">5cm</div><div class="val num" id="c5">0</div></div>
+    <div class="cbox tt"><div class="lab">この便 合計</div><div class="val num" id="ct">0</div></div>
+  </div>
+
+  <div class="band" id="band">
+    <div class="b1" id="bandT">読取待ち</div>
+    <div class="b3" id="bandS">リーダーで読むか、下の手入力から</div>
+    <div class="acts" id="bandA"></div>
+  </div>
+
+  <div class="modes">
+    <button class="mode" id="m3">3cm<span class="hint" id="m3hint">通常</span></button>
+    <button class="mode" id="m5">5cm<span class="hint" id="m5hint">固定</span></button>
+  </div>
+
+  <div class="listwrap">
+    <div class="lhead"><span>読取履歴（この便）</span><span id="lcount"></span></div>
+    <div class="lbtns">
+      <button class="btn sm dim" id="btnSel">選択削除</button>
+      <button class="btn sm dim" id="btnDelAll">全件削除</button>
+      <span class="selinfo" id="selInfo"></span>
+    </div>
+    <input class="search" id="hisSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
+    <div class="sep"></div>
+    <div id="list"></div>
+    <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
+  </div>
+
+  <footer>
+    <button class="btn" id="btnManual">手入力</button>
+    <button class="btn" id="btnLock">画面ロック</button>
+    <button class="btn" id="btnClose">締める</button>
+  </footer>
+</div>
+
+<!-- ============ ロック画面 ============ -->
+<div id="lockView">
+  <div class="lt">画面ロック中（読み取りは続けられます）</div>
+  <div class="lb" id="lockSub"></div>
+  <div class="lc num" id="lockCount">0</div>
+  <div class="lcs" id="lockBreak"></div>
+  <button id="unlock"><span class="fill" id="ufill"></span><span class="t">長押しで解除</span></button>
+  <button class="eco" id="ecoBtn">省電力表示に切り替える</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="askscrim" id="askScrim"></div>
+<div class="askbox" id="askBox">
+  <h2 id="askTitle"></h2>
+  <div class="body" id="askBody"></div>
+  <div class="field hide" id="askField"><input id="askInput" type="tel" inputmode="numeric" autocomplete="off"></div>
+  <button class="btn wide" id="askOk">OK</button>
+  <button class="btn wide hide" id="askAlt">もう一つ</button>
+  <button class="btn wide hide" id="askAlt2">もう一つ</button>
+  <button class="btn wide dim" id="askCancel">キャンセル</button>
+</div>
+
+<!-- 重複アラート -->
+<div class="sheet" id="shDup">
+  <h2 id="dupTitle">二度読みを検知しました</h2>
+  <div class="alertbox">
+    <div class="an num" id="dupNo"></div>
+    <div class="ar">今回の読取　<b class="num" id="dupNow"></b></div>
+    <div class="ar">最初の読取　<b class="num" id="dupFirst"></b>　<span id="dupBin"></span></div>
+  </div>
+  <div id="dupRest"></div>
+  <p class="note">この読取はカウントしていません。同じ荷物を2回通したか、荷物自体が重複している可能性があります。記録は集計画面に残ります。</p>
+  <button class="btn wide" id="dupAck">確認した（カウントしない）</button>
+  <button class="btn wide dim hide" id="dupAckAll">まとめて確認する</button>
+</div>
+
+<!-- 手入力 -->
+<div class="sheet" id="shManual">
+  <h2>番号を手入力</h2>
+  <div class="field"><label for="inNo">お問い合わせ番号</label><input id="inNo" type="tel" inputmode="numeric" maxlength="14" placeholder="123456789012（12桁）"></div>
+  <div class="rowbtns">
+    <button class="btn" id="btnMan3">3cmで登録</button>
+    <button class="btn" id="btnMan5">5cmで登録</button>
+  </div>
+  <button class="btn wide dim" data-close>閉じる</button>
+</div>
+
+<!-- 集計 -->
+<!-- 管理画面 -->
+<div class="sheet full" id="shAdmin">
+  <div class="sheethead">
+    <button class="btn sm dim" data-close>戻る</button>
+    <span class="ttl">管理画面</span>
+    <button class="btn sm dim" id="btnAdmLogout">ログアウト</button>
+  </div>
+  <div class="field"><label for="admDate">日付</label>
+    <input id="admDate" type="date" style="padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF">
+    <p class="note" id="admDateNote"></p></div>
+  <div id="admSummary"></div>
+  <h3>便の一覧</h3>
+  <div id="admList"></div>
+  <button class="btn wide danger hide" id="btnDelPicked">選択した便を削除する</button>
+
+  <h3>提出用（お客様へ渡す）</h3>
+  <button class="btn wide" id="btnSubDay">この日の全便を書き出す（1ファイル）</button>
+  <button class="btn wide" id="btnSubZip">便ごとのCSVをまとめて保存（ZIP）</button>
+  <button class="btn wide" id="btnSubNew">未書き出しの便だけ書き出す</button>
+  <p class="note">列は 日付・便・ドライバー・サイズ・番号・読取時刻 のみです。便ごとに書き出す場合は、上の一覧から便を開いてください。</p>
+
+  <div id="admInternal">
+    <h3>ドライバー画面の発信先（郵便局 大口窓口）</h3>
+    <div class="field"><label for="setPostName">名称</label><input id="setPostName" type="text" placeholder="大阪北郵便局 大口窓口"></div>
+    <div class="field"><label for="setPostTel">電話番号</label><input id="setPostTel" type="tel" inputmode="tel" placeholder="06-0000-0000"></div>
+    <button class="btn wide" id="btnSavePost">発信先を保存する</button>
+    <p class="note" id="setPostMsg">保存すると全端末のドライバー画面に反映されます。</p>
+
+    <h3>選択した日のデータ</h3>
+    <button class="btn wide danger" id="btnWipeToday">この日のデータを全消去する</button>
+    <p class="note">テストで作った便を片付けるためのものです。上で選んだ日の便・読取・記録・写真が、全端末分すべて消えます。</p>
+
+    <h3>社内用（記録の追跡まで含む）</h3>
+    <button class="btn wide dim" id="btnExpDay">この日を全部書き出す</button>
+    <button class="btn wide dim" id="btnExpAll">全期間を書き出す</button>
+    <p class="note">二度読みの検知や電話番号まで含みます。先方に渡すものではありません。</p>
+  </div>
+  <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
+</div>
+
+<!-- 便の明細 -->
+<div class="sheet full" id="shDetail">
+  <div class="sheethead">
+    <button class="btn sm dim" id="detBack">戻る</button>
+    <span class="ttl" id="detTitle">便の明細</span>
+    <button class="btn sm primary" id="detSub">CSV書き出し</button>
+  </div>
+  <div id="detMeta"></div>
+  <h3>読取</h3>
+  <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
+  <div class="sep"></div>
+  <div id="detScans"></div>
+  <div id="detInternal">
+    <div id="detDelWrap">
+    <h3>この便の削除</h3>
+    <button class="btn wide danger" id="detDelete">この便を削除する</button>
+    <p class="note">便と読取がすべて消え、計上からも外れます。削除の記録には残ります。</p>
+    </div>
+
+    <h3>二度読みの記録</h3>
+    <div id="detDup"></div>
+    <h3>削除の記録</h3>
+    <div id="detDel"></div>
+  </div>
+  <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
+</div>
+
+<!-- 回収資料の写真提出 -->
+<div class="sheet" id="shPhoto">
+  <div class="sheethead">
+    <button class="btn sm dim" data-close>戻る</button>
+    <span class="ttl">回収資料の写真提出</span>
+  </div>
+  <div class="field"><label for="phShift">どの便の資料ですか</label><select class="day" id="phShift"></select></div>
+  <div id="phList"><p class="note">写真なし</p></div>
+  <input type="file" id="phFile" accept="image/*" capture="environment" class="hide">
+  <button class="btn wide photo" id="phTake">撮影して提出する</button>
+  <p class="note">差出票など、郵便局で受け取った書類を撮影してください。提出した写真は弊社の管理システムで確認します。</p>
+  <button class="btn wide dim" data-close>閉じる</button>
+</div>
+
+<div class="sheet" id="shSum">
+  <div class="sheethead">
+    <button class="btn sm dim" data-close>閉じる</button>
+    <span class="ttl">本日の集計</span>
+    <button class="btn sm primary" id="btnNewShift">次の便を始める</button>
+  </div>
+  <button class="btn wide" id="btnCallSum">局へ発信</button>
+  <div class="field"><select class="day" id="sumWho"></select></div>
+  <table id="sumTable"><thead><tr><th>便 / ドライバー</th><th>3cm</th><th>5cm</th><th>合計</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
+  <p class="note" id="sumNote"></p>
+
+  <h3>便ごとの開始・締め</h3>
+  <div id="times"></div>
+
+  <h3>業務終了の記録（この端末）</h3>
+  <div id="endLog"></div>
+
+  <h3>二度読みの記録（この端末）</h3>
+  <div id="dupLog"></div>
+
+  <h3>削除の記録（この端末）</h3>
+  <div id="delLog"></div>
+  <p class="note">削除した読取はCSVには含みません。</p>
+
+  <h3>データ</h3>
+  <button class="btn wide" id="btnSubToday">提出用CSV（本日の全便）</button>
+  <button class="btn wide danger hide" id="btnCancelShift">この便を取り消して開始画面へ戻る</button>
+  <p class="note hide" id="cancelNote">IDやドライバーを間違えて始めたときに使います。読取があれば削除の記録に残ります。</p>
+  <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
+</div>
+
+<script>
+"use strict";
+const KEY="jet-scan-v2", AKEY="jet-scan-archive-v2";
+const $=id=>document.getElementById(id);
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");};
+const hhmm=ts=>{const d=new Date(ts);return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");};
+const hms=ts=>{const d=new Date(ts);return hhmm(ts)+":"+String(d.getSeconds()).padStart(2,"0");};
+
+let S=load();
+let mode3=true, sheetOpen=false, locked=false;
+let selMode=false, sel=new Set();
+
+function blank(){ return {date:today(),shifts:[],active:-1,dupLog:[],delLog:[],ends:[]}; }
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY); if(!raw) return blank();
+    const s=JSON.parse(raw);
+    if(s.date!==today()){ archive(s); return blank(); }
+    s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; s.ends=s.ends||[]; return s;
+  }catch(e){ return blank(); }
+}
+function mergeDay(t,x){
+  t.shifts=(t.shifts||[]).concat(x.shifts||[]);
+  t.dupLog=(t.dupLog||[]).concat(x.dupLog||[]);
+  t.delLog=(t.delLog||[]).concat(x.delLog||[]);
+  t.ends=(t.ends||[]).concat(x.ends||[]);
+  return t;
+}
+function dedupeDays(a){
+  const byDate=new Map();
+  a.forEach(d=>{
+    if(!d||!d.date) return;
+    if(byDate.has(d.date)) mergeDay(byDate.get(d.date),d);
+    else byDate.set(d.date,d);
+  });
+  return Array.from(byDate.values()).sort((p,q)=>p.date<q.date?-1:1);
+}
+function archive(s){
+  try{
+    if(!s||!s.shifts||!s.shifts.length) return;
+    let a=JSON.parse(localStorage.getItem(AKEY)||"[]");
+    a.push(s); a=dedupeDays(a);
+    while(a.length>60)a.shift();
+    localStorage.setItem(AKEY,JSON.stringify(a));
+    stripOldArchive();
+  }catch(e){}
+}
+function stripOldArchive(){
+  try{
+    const a=JSON.parse(localStorage.getItem(AKEY)||"[]");
+    const cut=new Date(); cut.setDate(cut.getDate()-7);
+    const cutStr=cut.getFullYear()+"-"+String(cut.getMonth()+1).padStart(2,"0")+"-"+String(cut.getDate()).padStart(2,"0");
+    let changed=false;
+    a.forEach(d=>{
+      if(d.date>=cutStr) return;
+      (d.shifts||[]).forEach(sh=>{
+        if(Array.isArray(sh.scans)&&sh.scans.length){
+          const c=cnt(sh); sh.c3=c.a; sh.c5=c.b; sh.scans=[]; sh._stripped=true; changed=true;
+        }
+      });
+      if(d.dupLog&&d.dupLog.length){ d.dupLog=[]; changed=true; }
+      if(d.delLog&&d.delLog.length>50){ d.delLog=d.delLog.slice(-50); changed=true; }
+    });
+    if(changed) localStorage.setItem(AKEY,JSON.stringify(a));
+    return changed;
+  }catch(e){ return false; }
+}
+let saveT=null, saveLast=0;
+function saveSoon(){                        // 読取のたびの保存を最大250msに1回へ
+  const now=Date.now();
+  if(now-saveLast>250){ saveLast=now; save(); return; }
+  if(saveT) return;
+  saveT=setTimeout(()=>{ saveT=null; saveLast=Date.now(); save(); },250);
+}
+["pagehide","blur"].forEach(ev=>window.addEventListener(ev,()=>{ if(saveT){ clearTimeout(saveT); saveT=null; } save(); }));
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") save(); });
+let saveWarned=false;
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(S)); }
+  catch(e){
+    stripOldArchive();
+    try{ localStorage.setItem(KEY,JSON.stringify(S)); }
+    catch(e2){
+      if(!saveWarned){ saveWarned=true;
+        notify("端末への保存に失敗しています","空き容量が不足しています。計数は続けられますが、同期済であることを必ず確認してください。"); }
+    }
+  }
+}
+const cur=()=>S.shifts[S.active];
+const inScan=()=>S.active>=0 && cur() && !cur().closed;
+
+function normalize(v){ return String(v).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[^0-9]/g,""); }
+const fmt=no=>no.length===12?no.slice(0,4)+"-"+no.slice(4,8)+"-"+no.slice(8):no;
+const LEN=12;
+function findFirst(no){
+  for(let i=0;i<S.shifts.length;i++){
+    const hit=S.shifts[i].scans.find(x=>x.no===no);
+    if(hit) return {ts:hit.ts,bin:S.shifts[i].bin,driver:S.shifts[i].driver};
+  }
+  return null;
+}
+
+let AC=null;
+function beep(freq,ms,vol){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended")AC.resume();
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.type="square";o.frequency.value=freq;g.gain.value=vol||.07;
+    o.connect(g);g.connect(AC.destination);o.start();
+    setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},ms);
+  }catch(e){}
+}
+const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
+function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTimeout(()=>beep(210,380,.1),960); buzz([250,120,250,120,250]); }
+
+/* ---------- 音の初期化（iOS対策） ---------- */
+function unlockAudio(){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==="suspended")AC.resume();
+    const o=AC.createOscillator(),g=AC.createGain();
+    g.gain.value=0.0001;o.connect(g);g.connect(AC.destination);o.start();
+    setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},40);
+  }catch(e){}
+}
+document.addEventListener("touchstart",unlockAudio,{once:true});
+document.addEventListener("mousedown",unlockAudio,{once:true});
+
+/* ---------- 共有設定（発信先など。Firebase nikki/jet_settings） ---------- */
+const SETKEY="jet-settings-v1";
+let SET=(()=>{ try{ return JSON.parse(localStorage.getItem(SETKEY)||"{}"); }catch(e){ return {}; } })();
+async function loadSettings(){
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_settings.json"); const v=await r.json();
+    if(v&&typeof v==="object"){ SET=Object.assign({},SET,v); localStorage.setItem(SETKEY,JSON.stringify(SET)); }
+  }catch(e){}
+  paintCall();
+}
+async function saveSettings(patch){
+  Object.assign(SET,patch); localStorage.setItem(SETKEY,JSON.stringify(SET));
+  const r=await fetch(FB_URL+"/nikki/jet_settings.json",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch)});
+  return r.ok;
+}
+function paintCall(){
+  const b=$("btnCall"); if(!b) return;
+  b.disabled=!(SET.postTel||"").trim();
+  b.title=SET.postName?SET.postName+"へ発信":"郵便局へ発信";
+}
+loadSettings();
+
+/* ---------- ID照合（日報アプリの登録データ） ---------- */
+const FB_URL="https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app";
+const MKEY="jet-master-v1";
+let MASTER=null;   // {drivers:[], companies:[], at}
+function asArr(v){ return Array.isArray(v)?v.filter(Boolean):(v?Object.values(v).filter(Boolean):[]); }
+async function loadMaster(force){
+  if(!force){ try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c&&Date.now()-c.at<6*3600*1000){ MASTER=c; return c; } }catch(e){} }
+  try{
+    const [d,c]=await Promise.all([
+      fetch(FB_URL+"/nikki/drivers.json").then(r=>r.json()),
+      fetch(FB_URL+"/nikki/companies.json").then(r=>r.json())
+    ]);
+    MASTER={drivers:asArr(d).map(x=>({id:String(x.id||""),empNo:String(x.empNo||""),driverNo:String(x.driverNo||""),
+      name:x.name||"",tel:x.tel||"",company:x.company||""})),
+      companies:asArr(c).map(x=>({code:String(x.companyCode||""),name:x.name||"",owner:String(x.ownerLoginId||"")})),at:Date.now()};
+    try{ localStorage.setItem(MKEY,JSON.stringify(MASTER)); }catch(e){}
+    return MASTER;
+  }catch(e){
+    try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c){ MASTER=c; return c; } }catch(e2){}
+    return null;
+  }
+}
+// 10001001 → 10001-001 のように区切りを補う
+function canonId(id){
+  let t=normId(id);
+  const m=t.match(/^(\d{5})(\d{3})$/); if(m) t=m[1]+"-"+m[2];
+  return t;
+}
+function findDriver(id){
+  if(!MASTER) return null;
+  const t=canonId(id), plain=t.replace("-","");
+  return MASTER.drivers.find(d=>[d.id,d.empNo,d.driverNo].some(v=>v&&(v===t||v.replace("-","")===plain)))||null;
+}
+function findCompany(id){
+  if(!MASTER) return null;
+  const t=normId(id);
+  return MASTER.companies.find(c=>c.code&&(c.code===t||c.owner===t||("9"+c.code)===t))||null;
+}
+let idState={kind:"",name:""};   // kind: driver / company / none
+async function resolveId(){
+  const raw=$("sId").value; const msg=$("sIdMsg");
+  idState={kind:"",name:""};
+  if(!normId(raw)){ msg.textContent=""; return; }
+  if(!MASTER){ msg.textContent="登録データを読み込み中"; await loadMaster(false); }
+  const d=findDriver(raw);
+  if(d){
+    $("sDrv").value=d.name; if(d.tel) $("sTel").value=d.tel;
+    $("sId").value=canonId(raw);
+    idState={kind:"driver",name:d.name};
+    if(isAutoBin($("sBin").value)) $("sBin").value=nextBinFor(raw,d.name);
+    msg.textContent="登録済み："+d.name+(d.company?"（"+d.company+"）":""); msg.style.color="#1D6B45"; return;
+  }
+  const c=findCompany(raw);
+  if(c){
+    idState={kind:"company",name:c.name};
+    msg.textContent=c.name+"：未登録のドライバーです。氏名と電話番号を入力してください"; msg.style.color="#7A5A00";
+    setTimeout(()=>$("sDrv").focus(),50); return;
+  }
+  if(!MASTER){ msg.textContent="登録データを取得できません。氏名を手入力して続行できます"; msg.style.color="#7A5A00"; return; }
+  msg.textContent="登録がないIDです。氏名を手入力して続行できます"; msg.style.color="#A8231C";
+}
+$("sId").addEventListener("change",resolveId);
+$("sId").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("sId").blur(); } });
+loadMaster(false);
+
+/* ---------- Firebase 同期（便の実績を nikki/jet_scan へ） ---------- */
+const DEVKEY="jet-device-id";
+let DEVICE=localStorage.getItem(DEVKEY);
+if(!DEVICE){ DEVICE="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); localStorage.setItem(DEVKEY,DEVICE); }
+const shiftKey=sh=>DEVICE+"_"+sh.id;
+const keyOf=sh=>sh._key||shiftKey(sh);
+// 同じドライバー（IDが同じ。IDが無ければ氏名）の便を数える
+function sameDriver(sh,id,name){
+  const a=normId(id), n=(name||"").trim();
+  if(a&&sh.driverId) return normId(sh.driverId)===a;
+  return !!n && (sh.driver||"").trim()===n;
+}
+function nextBinFor(id,name){ return "第"+(S.shifts.filter(sh=>sameDriver(sh,id,name)).length+1)+"便"; }
+const isAutoBin=v=>/^第\d+便$/.test((v||"").trim())||!(v||"").trim();
+const tidyBin=v=>{ const t=(v||"").trim(); return /^\d+$/.test(t)?"第"+t+"便":t; };
+function shiftPayload(day,sh){
+  const c=cnt(sh);
+  return {
+    key:shiftKey(sh), date:day.date, device:DEVICE,
+    bin:sh.bin, binNo:binNo(day,sh),
+    driverId:sh.driverId||"", driverName:sh.driver||"", tel:sh.tel||"",
+    corp:sh.corp||"", corpName:corpName(sh.corp), registered:sh.registered!==false,
+    startedAt:sh.startedAt||null, closedAt:sh.closedAt||null, closed:!!sh.closed,
+    c3:c.a, c5:c.b, total:c.a+c.b,
+    dupCount:(day.dupLog||[]).filter(d=>d.bin===sh.bin).length,
+    delCount:(day.delLog||[]).filter(d=>d.bin===sh.bin).length,
+    exportedAt:sh.exportedAt||null,
+    updatedAt:Date.now()
+  };
+}
+let syncBusy=false, syncTimer=null;
+function markDirty(sh){ if(sh){ sh._dirty=Date.now(); } scheduleSync(800); }
+function scheduleSync(ms){ clearTimeout(syncTimer); syncTimer=setTimeout(syncNow,ms||0); }
+async function syncNow(){
+  if(syncBusy||!navigator.onLine){ paintSync(); return; }
+  const list=S.shifts.filter(sh=>sh._dirty&&(!sh._synced||sh._dirty>sh._synced));
+  if(!list.length){ paintSync(); return; }
+  syncBusy=true; paintSync();
+  for(const sh of list){
+    const stamp=sh._dirty;
+    try{
+      const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+"/"+shiftKey(sh)+".json",
+        {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(shiftPayload(S,sh))});
+      if(!r.ok) continue;
+      sh._synced=stamp;
+      // 番号一覧は 20件たまるごと / 減ったとき / 締めたとき だけ送る（通信量対策）
+      const nlen=sh.scans.length, plen=sh._nosLen||0;
+      if(nlen-plen>=100||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
+        const nr=await fetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+"/"+shiftKey(sh)+".json",
+          {method:"PUT",headers:{"Content-Type":"application/json"},
+           body:JSON.stringify(sh.scans.map(x=>({n:x.no,s:x.size,t:x.ts})))});
+        if(nr.ok){ sh._nosLen=nlen; if(sh.closed) sh._nosDone=true; }
+      }
+    }catch(e){ break; }
+  }
+  save(); syncBusy=false; paintSync();
+  if(S.shifts.some(sh=>sh._dirty&&(!sh._synced||sh._dirty>sh._synced))) scheduleSync(15000);
+}
+function paintSync(){
+  const el=$("syncDot"); if(!el) return;
+  const pend=S.shifts.filter(sh=>sh._dirty&&(!sh._synced||sh._dirty>sh._synced)).length;
+  if(syncBusy){ el.textContent="同期中"; el.style.color="#4A5B6B"; }
+  else if(!navigator.onLine){ el.textContent="オフライン"; el.style.color="#A8231C"; }
+  else if(pend){ el.textContent="未同期 "+pend; el.style.color="#7A5A00"; }
+  else { el.textContent="同期済"; el.style.color="#1D6B45"; }
+}
+window.addEventListener("online",()=>scheduleSync(300));
+window.addEventListener("offline",paintSync);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") scheduleSync(300); });
+setInterval(()=>{ scheduleSync(0); },60000);
+
+/* ---------- キーボード表示時のずれ対策 ---------- */
+document.addEventListener("focusin",e=>{
+  const el=e.target;
+  if(!el||!/^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) return;
+  setTimeout(()=>{
+    try{ window.scrollTo(0,0); el.scrollIntoView({block:"center",behavior:"smooth"}); }catch(err){}
+  },300);
+});
+document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
+
+/* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
+const APP_VER="2026-09-02.44";
+$("verNote").textContent="版 "+APP_VER;
+async function checkUpdate(){
+  if(inScan()) return;
+  try{
+    const r=await fetch(location.pathname+"?chk="+Date.now(),{cache:"no-store"});
+    const t=await r.text(); const m=t.match(/APP_VER="([^"]+)"/);
+    if(!m||m[1]===APP_VER) return;
+    if(sessionStorage.getItem("jet-upd-try")===m[1]) { $("verNote").textContent="版 "+APP_VER+"（新しい版 "+m[1]+" があります。ブラウザで開き直してください）"; return; }
+    sessionStorage.setItem("jet-upd-try",m[1]);
+    $("verNote").textContent="新しい版に更新しています";
+    setTimeout(()=>location.replace(location.pathname+"?u="+Date.now()),400);
+  }catch(e){}
+}
+setTimeout(checkUpdate,1500);
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") setTimeout(checkUpdate,800); });
+
+/* ---------- 先頭へ / 末尾へ ---------- */
+document.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>{
+  const box=b.closest(".sheet,.listwrap"); if(!box) return;
+  box.scrollTo({top:b.getAttribute("data-jump")==="top"?0:box.scrollHeight,behavior:"smooth"});
+});
+const digitsOf=v=>String(v||"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[^0-9]/g,"");
+
+/* ---------- 確認ダイアログ ---------- */
+let askOpen=false, askOnOk=null, askOnAlt=null, askOnAlt2=null;
+function ask(o){
+  askOpen=true; askOnOk=o.onOk||null;
+  $("askTitle").textContent=o.title||"";
+  $("askBody").textContent=o.body||"";
+  $("askBody").style.display=o.body?"":"none";
+  $("askField").className=o.input?"field":"field hide";
+  $("askInput").value="";
+  $("askOk").textContent=o.okText||"OK";
+  $("askOk").className="btn wide"+(o.danger?" danger":"");
+  askOnAlt=o.onAlt||null;
+  $("askAlt").textContent=o.altText||"";
+  $("askAlt").className="btn wide"+(o.altText?"":" hide");
+  askOnAlt2=o.onAlt2||null;
+  $("askAlt2").textContent=o.alt2Text||"";
+  $("askAlt2").className="btn wide"+(o.alt2Text?"":" hide");
+  $("askCancel").className="btn wide dim"+(o.noCancel?" hide":"");
+  $("askScrim").classList.add("on"); $("askBox").classList.add("on");
+  if(o.input) setTimeout(()=>$("askInput").focus(),90);
+}
+function askClose(){ askOpen=false; askOnOk=null; askOnAlt=null; askOnAlt2=null; $("askScrim").classList.remove("on"); $("askBox").classList.remove("on"); }
+$("askCancel").onclick=askClose;
+$("askScrim").onclick=askClose;
+$("askOk").onclick=()=>{ const v=$("askInput").value; const cb=askOnOk; askClose(); if(cb) cb(v); };
+$("askAlt").onclick=()=>{ const cb=askOnAlt; askClose(); if(cb) cb(); };
+$("askAlt2").onclick=()=>{ const cb=askOnAlt2; askClose(); if(cb) cb(); };
+$("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("askOk").click(); } });
+const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCancel:true});
+
+/* ---------- 読取 ---------- */
+let seenIdx=null;
+function buildSeen(){ seenIdx=new Map(); S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>seenIdx.set(x.no,true))); }
+function handle(raw){
+  const no=normalize(raw); if(!no) return;
+  if(!inScan()) return;
+  if(!seenIdx) buildSeen();
+
+  if(!/^\d{12}$/.test(no)){
+    setBand("dup","12桁ではありません",no,no.length+"桁を読み取りました。カウントしていません");
+    beep(220,320,.09); buzz([80,60,80]); return;
+  }
+  if(seenIdx.has(no)){
+    const first=findFirst(no);
+    if(first){ showDup(no,first); return; }
+    seenIdx.delete(no);
+  }
+
+  commit(no);
+}
+function commit(no){
+  const size=mode3?3:5;
+  seenIdx&&seenIdx.set(no,true);
+  const sh=cur();
+  sh.scans.push({no:no,size:size,ts:Date.now()});
+  if(size===3) sh.c3=(sh.c3||0)+1; else sh.c5=(sh.c5||0)+1;
+  saveSoon(); markDirty(sh);
+  setBand("ok",size+"cm で登録",fmt(no),"この便 "+sh.scans.length+"件");
+  beep(size===5?1180:900,size===5?110:60,.06);
+  buzz(size===5?[40,40,40]:25);
+  renderSoon();
+}
+let dupQ=[], dupOpen=false;
+function showDup(no,first){
+  const now=Date.now();
+  S.dupLog.push({no:no,ts:now,firstTs:first.ts,firstBin:first.bin,bin:cur().bin});
+  saveSoon();
+  dupQ.push({no:no,ts:now,first:first});
+  setBand("dup","二度読み検知",fmt(no),hms(first.ts)+" に読取済み");
+  alarm();
+  if(!dupOpen) nextDup(); else paintDupRest();
+  renderSoon();
+}
+function paintDupRest(){
+  const n=dupQ.length;
+  $("dupTitle").textContent=n?("二度読みを検知しました（残り "+(n+1)+"件）"):"二度読みを検知しました";
+  $("dupRest").innerHTML=n?'<div class="note" style="margin:8px 2px 0">このあと確認する分</div>'+
+    dupQ.slice(0,6).map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3;padding:5px 9px">'+
+      '<span class="no num" style="font-size:14px">'+fmt(d.no)+'</span>'+
+      '<span class="tm num">'+hms(d.ts)+"</span></div>").join("")+
+    (n>6?'<p class="note">ほか '+(n-6)+"件</p>":""):"";
+  $("dupAck").textContent=n?("この1件を確認（残り"+n+"件）"):"確認した（カウントしない）";
+  $("dupAckAll").className="btn wide dim"+(n?"":" hide");
+  $("dupAckAll").textContent="まとめて確認する（"+(n+1)+"件）";
+}
+function nextDup(){
+  const d=dupQ.shift();
+  if(!d){ dupOpen=false; closeSheets(); return; }
+  if(locked) setLock(false);
+  dupOpen=true;
+  $("dupNo").textContent=fmt(d.no);
+  $("dupNow").textContent=hms(d.ts);
+  $("dupFirst").textContent=hms(d.first.ts);
+  $("dupBin").textContent="（"+d.first.bin+(d.first.driver?" / "+d.first.driver:"")+"）";
+  paintDupRest();
+  openSheet("shDup");
+}
+$("dupAck").onclick=()=>{ if(dupQ.length) nextDup(); else { dupOpen=false; closeSheets(); } };
+$("dupAckAll").onclick=()=>{ dupQ=[]; dupOpen=false; closeSheets(); };
+
+function setBand(cls,t,big,sub){
+  const b=$("band"); b.className="band"+(cls?" "+cls:"");
+  b.innerHTML='<div class="b1"></div>'+(big?'<div class="b2 num"></div>':'')+'<div class="b3"></div><div class="acts" id="bandA"></div>';
+  b.querySelector(".b1").textContent=t;
+  if(big) b.querySelector(".b2").textContent=big;
+  b.querySelector(".b3").textContent=sub||"";
+}
+/* ---------- 画面切替 ---------- */
+function showView(){
+  const scan=inScan();
+  keepAwake(scan);
+  $("vStart").className=scan?"hide":"";
+  $("vScan").className=scan?"":"hide";
+  if(scan) $("vScan").style.display="flex";
+  if(!scan) prepStart();
+}
+function openShiftIdx(){ return S.shifts.findIndex(sh=>!sh.closed); }
+function prepStart(){
+  const oi=openShiftIdx();
+  $("btnResume").className="btn wide"+(oi<0?" hide":"");
+  if(oi>=0) $("btnResume").textContent=S.shifts[oi].bin+"（計数中）に戻る";
+  const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  const lastEnd=S.ends.length?S.ends[S.ends.length-1].ts:0;
+  const carry=last&&!(lastEnd&&lastEnd>(last.closedAt||last.startedAt||0));   // 業務終了後は引き継がない
+  $("sBin").value=carry?nextBinFor(last.driverId,last.driver):"第1便";
+  $("sDrv").value=carry?last.driver:"";
+  $("sTel").value=carry?(last.tel||""):"";
+  $("sId").value=carry?(last.driverId||""):"";
+  $("sIdMsg").textContent=""; idState={kind:"",name:""};
+  if(carry&&last.driverId){ idState={kind:last.registered===false?"company":"driver",name:last.driver}; resolveId(); }
+  $("btnOther").className="btn wide dim"+(carry?"":" hide");
+  let html="";
+  if(last&&last.closed){
+    const a=last.scans.filter(x=>x.size===3).length,b=last.scans.filter(x=>x.size===5).length;
+    html="直前：<b>"+last.bin+"</b>　"+(last.driver||"")+"<br>"+
+         "開始 <b>"+hhmm(last.startedAt)+"</b>　締め <b>"+hhmm(last.closedAt)+"</b>　計 <b>"+(a+b)+"</b>個";
+    if(last.tel) html+='<br><a class="tel" href="tel:'+last.tel.replace(/[^0-9+]/g,"")+'">'+last.tel+" に発信</a>";
+  }
+  if(S.ends.length){
+    html+=(html?"<br><br>":"")+"本日の業務終了：<b>"+S.ends.map(e=>e.driver+" "+hhmm(e.ts)).join("</b>　<b>")+"</b>";
+  }
+  $("startPrev").innerHTML=html;
+}
+$("btnOther").onclick=()=>{
+  $("sId").value=""; $("sDrv").value=""; $("sTel").value=""; $("sIdMsg").textContent=""; $("sBin").value="第1便";
+  idState={kind:"",name:""}; $("btnOther").className="btn wide dim hide";
+  setTimeout(()=>$("sId").focus(),50);
+};
+$("btnResume").onclick=()=>{
+  const oi=openShiftIdx(); if(oi<0) return;
+  S.active=oi; save(); showView(); render();
+};
+$("btnFinish").onclick=()=>{
+  const drv=$("sDrv").value.trim();
+  const last=S.shifts.length?S.shifts[S.shifts.length-1]:null;
+  if(!S.shifts.length){ notify("記録がありません","本日はまだ便が始まっていません。"); return; }
+  const oi=openShiftIdx();
+  if(oi>=0){ notify("締めていない便があります",S.shifts[oi].bin+" がまだ締まっていません。\n上の「"+S.shifts[oi].bin+"（計数中）に戻る」から締めてください。"); return; }
+  const name=drv||(last?last.driver:"");
+  const todo=S.shifts.filter(sh=>sh.closed&&!sh.exportedAt).length;
+  ask({title:"業務終了を記録します",
+    body:name+"　"+hhmm(Date.now())+(todo?"\n未書き出しの便が "+todo+"便 あります。あとから管理画面で書き出せます。":""),
+    okText:"終了する",
+    onOk:()=>{
+      S.ends.push({driver:name,tel:$("sTel").value.trim()||(last?last.tel:""),ts:Date.now()});
+      save(); beep(660,140,.06); prepStart();
+      notify("業務終了を記録しました",name+"　"+hhmm(S.ends[S.ends.length-1].ts)+"\n続けて稼働する場合は、そのまま次の便を始められます。");
+    }});
+};
+$("btnStart").onclick=()=>{
+  const id=normId($("sId").value);
+  if(!id){ notify("IDが未入力です","社員番号を入力してください。"); return; }
+  const drv=$("sDrv").value.trim();
+  if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
+  const binIn=$("sBin").value.trim();
+  S.shifts.push({id:Date.now(),bin:isAutoBin(binIn)?nextBinFor(id,drv):tidyBin(binIn),
+    driver:drv,tel:$("sTel").value.trim(),driverId:canonId(id),corp:corpFromId(id),
+    registered:idState.kind==="driver",
+    startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
+  S.active=S.shifts.length-1; save();
+  markDirty(cur());
+  mode3=true; selMode=false; sel.clear();
+  setBand("",cur().bin+" 開始 "+hhmm(cur().startedAt),"","読取待ち");
+  showView(); render();
+  beep(880,80,.05);
+};
+$("btnSumFromStart").onclick=openSummary;
+
+/* ---------- 描画 ---------- */
+let renderQ=false;
+function renderSoon(){                      // 連続読取時は描画をまとめて1回に
+  if(renderQ) return; renderQ=true;
+  requestAnimationFrame(()=>{ renderQ=false; render(); });
+}
+function render(){
+  if(!inScan()){ showView(); return; }
+  const sh=cur();
+  const cc=cnt(sh), c3=cc.a, c5=cc.b;
+  $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
+  $("hBin").textContent=sh.bin;
+  $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt);
+  paintCall(); paintSync();
+  $("m3").className="mode"+(mode3?" on3":"");
+  $("m5").className="mode"+(mode3?"":" on5");
+  $("m3hint").textContent=mode3?"固定中":"切替";
+  $("m5hint").textContent=mode3?"切替":"固定中";
+  $("lcount").textContent=sh.scans.length+"件";
+  $("btnSel").textContent=selMode?"選択をやめる":"選択削除";
+  $("btnSel").className="btn sm"+(selMode?"":" dim");
+  $("btnDelAll").className="btn sm"+(selMode?" danger":" dim");
+  $("btnDelAll").textContent=selMode?("選択した"+sel.size+"件を削除"):"全件削除";
+  $("btnDelAll").disabled=selMode&&sel.size===0;
+  $("selInfo").textContent=selMode?"行をタップで選択":"";
+
+  const l=$("list");
+  const q=digitsOf($("hisSearch").value);
+  const src=q?sh.scans.filter(x=>x.no.includes(q)):sh.scans.slice(-60);
+  if(!sh.scans.length){ l.innerHTML='<div class="empty">まだ読み取りがありません</div>'; }
+  else if(q&&!src.length){ l.innerHTML='<div class="empty">「'+q+'」を含む番号はありません</div>'; }
+  else{
+    l.innerHTML=src.slice().reverse().map(x=>
+      '<div class="row'+(selMode&&sel.has(x.no)?" pick":"")+'" data-no="'+x.no+'">'+
+      (selMode?'<span class="ck">'+(sel.has(x.no)?"✓":"")+'</span>':'')+
+      '<span class="no num">'+fmt(x.no)+'</span>'+
+      '<span class="tag tag'+x.size+'">'+x.size+'cm</span>'+
+      '<span class="tm num">'+hhmm(x.ts)+'</span>'+
+      (selMode?'':'<button class="x" data-del="'+x.no+'">削除</button>')+
+      '</div>').join("");
+    if(selMode){
+      l.querySelectorAll("[data-no]").forEach(r=>r.onclick=()=>{
+        const no=r.getAttribute("data-no");
+        if(sel.has(no)) sel.delete(no); else sel.add(no);
+        render();
+      });
+    }else{
+      l.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+        const no=b.getAttribute("data-del");
+        const x=sh.scans.find(v=>v.no===no); if(!x) return;
+        ask({title:"この読取を削除します",body:fmt(no)+"　"+x.size+"cm　"+hhmm(x.ts),okText:"削除する",danger:true,
+          onOk:()=>{ removeScans([x],"個別削除"); setBand("","1件削除しました",fmt(no),"この便 "+sh.scans.length+"件"); }});
+      });
+    }
+  }
+  if(locked) paintLock();
+}
+
+/* ---------- 削除 ---------- */
+function removeScans(items,kind){
+  const sh=cur(), now=Date.now();
+  const nos=new Set(items.map(x=>x.no));
+  items.forEach(x=>S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:kind}));
+  sh.scans=sh.scans.filter(x=>!nos.has(x.no));
+  sh.c3=sh.scans.filter(x=>x.size===3).length; sh.c5=sh.scans.length-sh.c3;
+  seenIdx=null;
+  sel.clear(); save(); markDirty(sh); render();
+}
+$("btnSel").onclick=()=>{ selMode=!selMode; sel.clear(); render(); };
+$("btnDelAll").onclick=()=>{
+  const sh=cur();
+  if(selMode){
+    if(!sel.size) return;
+    const items=sh.scans.filter(x=>sel.has(x.no));
+    ask({title:"選択した "+items.length+"件 を削除します",body:"削除の記録には残ります。",okText:"削除する",danger:true,
+      onOk:()=>{ removeScans(items,"選択削除"); selMode=false;
+        setBand("",items.length+"件を削除しました","","この便 "+sh.scans.length+"件");
+        beep(300,200,.08); buzz([120,80,120]); render(); }});
+  }else{
+    if(!sh.scans.length) return;
+    const n=sh.scans.length;
+    ask({title:sh.bin+" の読取 "+n+"件 をすべて削除します",
+      body:"この便の計数は0からやり直しになります。削除の記録には残ります。",okText:"全件削除する",danger:true,
+      onOk:()=>{ ask({title:"本当に全件削除しますか",body:n+"件が消えます。",okText:"削除を実行する",danger:true,
+        onOk:()=>{ removeScans(sh.scans.slice(),"全件削除");
+          setBand("warn","全件削除しました","","この便 0件。最初から読み直してください");
+          beep(300,200,.08); buzz([120,80,120]); }}); }});
+  }
+};
+function callPost(){
+  const t=(SET.postTel||"").trim();
+  if(!t){ notify("発信先が未設定です","管理画面（社内）で郵便局の電話番号を設定してください。"); return; }
+  ask({title:(SET.postName||"郵便局")+" へ発信します",body:t,okText:"発信する",
+    onOk:()=>{ location.href="tel:"+t.replace(/[^0-9+]/g,""); }});
+}
+$("btnCallSum").onclick=callPost;
+$("btnCall").onclick=()=>{
+  const t=(SET.postTel||"").trim();
+  if(!t){ notify("発信先が未設定です","管理画面（社内）で郵便局の電話番号を設定してください。"); return; }
+  ask({title:(SET.postName||"郵便局")+" へ発信します",body:t,okText:"発信する",
+    onOk:()=>{ location.href="tel:"+t.replace(/[^0-9+]/g,""); }});
+};
+
+/* ---------- ロック ---------- */
+function paintLock(){
+  const sh=cur(); if(!sh) return;
+  const c3=sh.scans.filter(x=>x.size===3).length,c5=sh.scans.filter(x=>x.size===5).length;
+  $("lockSub").textContent=sh.bin+" / "+sh.driver;
+  $("lockCount").textContent=c3+c5;
+  $("lockBreak").textContent="3cm "+c3+" ・ 5cm "+c5;
+}
+let eco=localStorage.getItem("jet-eco")==="1";
+function paintEco(){
+  $("lockView").classList.toggle("dark",eco);
+  $("ecoBtn").textContent=eco?"通常の明るさに戻す":"省電力表示に切り替える";
+}
+$("ecoBtn").onclick=()=>{ eco=!eco; localStorage.setItem("jet-eco",eco?"1":"0"); paintEco(); };
+function setLock(v){
+  locked=v; $("lockView").classList.toggle("on",v);
+  if(v){ paintEco(); paintLock(); }
+}
+
+// 計数中は画面を消させない（対応端末のみ）
+let wakeLock=null;
+async function keepAwake(on){
+  try{
+    if(on){ if(!wakeLock&&navigator.wakeLock) wakeLock=await navigator.wakeLock.request("screen"); }
+    else if(wakeLock){ await wakeLock.release(); wakeLock=null; }
+  }catch(e){}
+}
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible"){
+    if(inScan()) keepAwake(true);
+    const away=Date.now()-(hiddenAt||0);
+    if(hiddenAt&&away>8000&&inScan()){
+      const sh=cur(), c=cnt(sh);
+      notify("画面が消えていた間は読み取れていません",
+        "止まっていた時間 約"+Math.round(away/1000)+"秒\nこの便の件数：3cm "+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+
+        "\n数が合わない場合は、その間に通した分を読み直してください。");
+    }
+    hiddenAt=0;
+  }else{ hiddenAt=Date.now(); }
+});
+let hiddenAt=0;
+$("btnLock").onclick=()=>setLock(true);
+let lockWarnT=null;
+function notifyLocked(){
+  if(lockWarnT) return;
+  $("lockBreak").textContent="ロック中です。読み取っていません";
+  beep(300,180,.08); buzz([100,80,100]);
+  lockWarnT=setTimeout(()=>{ lockWarnT=null; paintLock(); },2500);
+}
+(function(){
+  const b=$("unlock"), f=$("ufill"); let t0=0,raf=null,holding=false;
+  const step=()=>{
+    if(!holding) return;
+    const p=Math.min(1,(Date.now()-t0)/1200);
+    f.style.width=(p*100)+"%";
+    if(p>=1){ stop(); setLock(false); beep(880,70,.05); buzz(40); }
+    else raf=requestAnimationFrame(step);
+  };
+  const start=e=>{
+    if(holding) return;
+    if(e.cancelable) e.preventDefault();
+    holding=true; t0=Date.now();
+    try{ if(e.pointerId!=null&&b.setPointerCapture) b.setPointerCapture(e.pointerId); }catch(err){}
+    raf=requestAnimationFrame(step);
+  };
+  const stop=()=>{ holding=false; if(raf)cancelAnimationFrame(raf); raf=null; f.style.width="0"; };
+  b.addEventListener("pointerdown",start);
+  b.addEventListener("touchstart",start,{passive:false});
+  b.addEventListener("mousedown",start);
+  ["pointerup","pointercancel","touchend","touchcancel","mouseup"].forEach(ev=>b.addEventListener(ev,stop));
+  window.addEventListener("pointerup",stop); window.addEventListener("mouseup",stop);
+})();
+
+/* ---------- リーダー入力 ---------- */
+// 通常時は速度を問わず受け付ける。入力欄にカーソルがあるときだけ、
+// 「打ち終えるまでの合計時間」でリーダー（速い）と手入力（遅い）を区別する。
+let buf="", bufT=0, bufStart=0;
+document.addEventListener("keydown",e=>{
+  const el=document.activeElement;
+  const inField=!!(el&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+  const now=Date.now();
+  if(now-bufT>800){ buf=""; bufStart=now; }
+  bufT=now;
+
+  if(e.key==="Enter"||e.key==="Tab"){
+    const code=buf; const dur=now-bufStart; buf="";
+    if(code.length<6) return;
+    // 欄にカーソルがある場合のみ速度で判定（1文字あたり120ms以内ならリーダー）
+    if(inField && dur > code.length*120) return;       // 手で打った分は各欄に任せる
+    e.preventDefault();
+    if(inField){
+      try{ el.value=el.value.split(code).join(""); el.blur(); }catch(err){}
+      if(el.id==="hisSearch"||el.id==="detSearch"){ try{ el.value=""; }catch(err){} }
+      if(el.id==="hisSearch") render();
+    }
+    if(askOpen||!inScan()) return;
+    if(sheetOpen&&!dupOpen) return;      // 二度読みの確認中は読み取りを続けられる
+    handle(code);
+    if(locked) paintLock();
+    return;
+  }
+  if(e.key.length===1){
+    if(!buf) bufStart=now;
+    buf+=e.key; if(buf.length>40){ buf=buf.slice(-40); }
+  }
+});
+
+/* ---------- シート ---------- */
+function openSheet(id){ sheetOpen=true; $("scrim").classList.add("on"); $(id).classList.add("on"); }
+function closeSheets(){ sheetOpen=false; $("scrim").classList.remove("on");
+  document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("on"));
+  try{ const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) a.blur(); }catch(e){} }
+$("scrim").onclick=()=>{ if($("shDup").classList.contains("on")) return; closeSheets(); };
+document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheets);
+
+function setMode(v){
+  if(mode3===v){ render(); return; }
+  mode3=v;
+  setBand(v?"":"warn",(v?"3cm":"5cm")+"に固定しました","",v?"以後の読取は3cmで計数します":"3cmに戻すまで5cmで計数します");
+  beep(v?900:1180,90,.06); render();
+}
+$("m3").onclick=()=>setMode(true);
+$("m5").onclick=()=>setMode(false);
+
+$("hisSearch").addEventListener("input",()=>render());
+$("hisSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("hisSearch").blur(); } });
+$("btnManual").onclick=()=>{ $("inNo").value=""; openSheet("shManual"); setTimeout(()=>$("inNo").focus(),80); };
+$("btnMan3").onclick=()=>{ const v=$("inNo").value; mode3=true; closeSheets(); handle(v); };
+$("btnMan5").onclick=()=>{ const v=$("inNo").value; mode3=false; closeSheets(); handle(v); };
+$("btnMenu").onclick=openSummary;
+// 計数画面のログアウト：読取が1件でもあれば不可（締めるで確定させる）
+$("btnLogout").onclick=()=>{
+  if(!inScan()) return;
+  const sh=cur();
+  if(sh.scans.length){
+    notify("ログアウトできません","読取が "+sh.scans.length+"件あります。\n「締める」で便を確定してください。\n誤ってIDを入力した場合は、集計の「この便を取り消す」から取り消せます。");
+    return;
+  }
+  ask({title:"ログアウトします",body:sh.bin+"（"+sh.driver+"）は読取がないため記録に残りません。",okText:"ログアウト",
+    onOk:()=>{
+      S.shifts=S.shifts.filter(x=>x!==sh); S.active=-1; save();
+      fbDeleteShift(S,sh);
+      showView(); $("btnOther").click();
+    }});
+};
+
+// 他のドライバー（別端末を含む）と番号が重複していないかを締める前に確認する
+async function crossCheck(sh){
+  const mine=new Set(S.shifts.map(x=>shiftKey(x)));
+  const out=[];
+  try{
+    const [sr,nr]=await Promise.all([
+      fetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"),
+      fetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+".json")
+    ]);
+    const sum=(await sr.json())||{}, nos=(await nr.json())||{};
+    const idx=new Map();                       // 番号 -> 先に読んだ人
+    Object.values(sum).forEach(j=>{
+      if(!j||!j.key||mine.has(j.key)||isGone(j.key)) return;
+      const arr=Array.isArray(nos[j.key])?nos[j.key]:(Array.isArray(j.scans)?j.scans.map(x=>({n:x.no,s:x.size,t:x.ts})):[]);
+      arr.forEach(x=>{
+        const no=x.n||x.no, ts=x.t||x.ts||0;
+        const cur0=idx.get(no);
+        if(!cur0||ts<cur0.ts) idx.set(no,{ts:ts,bin:j.bin||"",driver:j.driverName||"",closed:!!j.closed});
+      });
+    });
+    sh.scans.forEach(x=>{ const o=idx.get(x.no); if(o) out.push({no:x.no,size:x.size,mineTs:x.ts,other:o}); });
+    return {ok:true,list:out};
+  }catch(e){ return {ok:false,list:[]}; }
+}
+function finishAfterClose(sh,call){
+  doClose(sh);
+  S.ends.push({driver:sh.driver,tel:sh.tel||"",ts:Date.now()});
+  save();
+  notify("業務終了を記録しました",sh.driver+"　"+hhmm(Date.now())+
+    ((SET.postTel||"").trim()&&call?"\n続けて発信します。":""));
+  if(call&&(SET.postTel||"").trim()) setTimeout(()=>{ location.href="tel:"+(SET.postTel||"").replace(/[^0-9+]/g,""); },600);
+}
+function doClose(sh){
+  sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0);
+  sumWho=driverKeyOf(sh)||"__all";        // 締めた本人の便だけを表示
+  beep(880,120,.06); openSummary(); showView();
+}
+$("btnClose").onclick=async()=>{
+  const sh=cur();
+  if(!sh.scans.length){ setBand("warn","読取が0件です","","締める前に読み取ってください"); return; }
+  setBand("warn","他のドライバーとの重複を確認しています","","少しお待ちください");
+  const res=await crossCheck(sh);
+  const later=res.list.filter(d=>d.mineTs>=d.other.ts);   // こちらが後から読んだ分
+  const earlier=res.list.filter(d=>d.mineTs<d.other.ts);
+  const a=cnt(sh).a, b=cnt(sh).b;
+  const dest=(SET.postName||"").trim()||"郵便局";
+  const base=(a2,b2)=>"3cm "+a2+"個　5cm "+b2+"個　計 "+(a2+b2)+"個\n締め時刻 "+hhmm(Date.now())+
+         "\n\n"+dest+"に電話を入れてから向かってください。"+((SET.postTel||"").trim()?"\n"+SET.postTel:"")+
+         "\n締めた後の画面にある「局へ発信」から掛けられます。";
+
+  if(later.length){
+    const a2=a-later.filter(d=>d.size===3).length, b2=b-later.filter(d=>d.size===5).length;
+    alarm();
+    ask({title:"他のドライバーと重複しています",
+      body:later.length+"件が先に読み取られています。\n"+
+        later.slice(0,8).map(d=>fmt(d.no)+"　先： "+d.other.driver+"（"+d.other.bin+"）"+hms(d.other.ts)).join("\n")+
+        (later.length>8?"\nほか "+(later.length-8)+"件":"")+
+        "\n\nこの便から差し引いて締めます。\n"+base(a2,b2),
+      okText:"差し引いて締める",danger:true,
+      onOk:()=>{
+        const now=Date.now(), nos=new Set(later.map(d=>d.no));
+        S.delLog=S.delLog||[];
+        sh.scans.filter(x=>nos.has(x.no)).forEach(x=>S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"他ドライバーと重複"}));
+        sh.scans=sh.scans.filter(x=>!nos.has(x.no));
+        sh.c3=sh.scans.filter(x=>x.size===3).length; sh.c5=sh.scans.length-sh.c3;
+        seenIdx=null;
+        doClose(sh);
+      }});
+    return;
+  }
+  if(earlier.length){
+    ask({title:"他のドライバーと重複しています",
+      body:earlier.length+"件が、後から他のドライバーにも読まれています。\n"+
+        earlier.slice(0,8).map(d=>fmt(d.no)+"　後： "+d.other.driver+"（"+d.other.bin+"）"+hms(d.other.ts)).join("\n")+
+        (earlier.length>8?"\nほか "+(earlier.length-8)+"件":"")+
+        "\n\nこの便は先に読んでいるため、そのまま締めます。\n相手が締めるときに差し引かれます。\n\n"+base(a,b),
+      okText:"締める",onOk:()=>doClose(sh)});
+    return;
+  }
+  const tel=(SET.postTel||"").trim();
+  ask({title:sh.bin+"（"+sh.driver+"）を締めます",
+    body:(res.ok?"":"※通信できないため、他のドライバーとの重複は確認できていません。\n\n")+base(a,b),
+    okText:tel?"締めて発信する":"締める",
+    onOk:()=>{ doClose(sh); if(tel) setTimeout(()=>{ location.href="tel:"+tel.replace(/[^0-9+]/g,""); },400); },
+    altText:tel?"締めるだけ":"",
+    onAlt:()=>doClose(sh),
+    alt2Text:"最終便：締めて業務終了"+(tel?"して発信":""),
+    onAlt2:()=>finishAfterClose(sh,!!tel)});
+};
+$("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締めていません","先に現在の便を締めてください。"); return; } showView(); };
+
+/* ---------- 集計 ---------- */
+let sumWho=null;   // null=全員 / それ以外は driverId または氏名
+const gone=new Map();                      // 削除直後の便がサーバーから読み戻るのを防ぐ
+function markGone(k){ gone.set(k,Date.now()); }
+function isGone(k){
+  const t=gone.get(k); if(!t) return false;
+  if(Date.now()-t>30000){ gone.delete(k); return false; }
+  return true;
+}
+async function fbDeleteShift(day,sh){
+  markGone(keyOf(sh));
+  try{ await fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
+  try{ await fetch(FB_URL+"/nikki/jet_scan_nos/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
+}
+$("btnCancelShift").onclick=()=>{
+  if(!inScan()) return;
+  const sh=cur(), n=sh.scans.length;
+  ask({title:sh.bin+"（"+sh.driver+"）を取り消します",
+    body:(n?"読取 "+n+"件は削除の記録に残ります。\n":"")+"この便は記録から消え、開始画面に戻ります。",
+    okText:"取り消す",danger:true,
+    onOk:()=>{
+      if(n) removeScans(sh.scans.slice(),"便取消");
+      S.shifts=S.shifts.filter(x=>x!==sh); S.active=-1; save();
+      fbDeleteShift(S,sh);
+      closeSheets(); showView();
+      $("btnOther").click();
+      notify("便を取り消しました","IDから入力し直してください。");
+    }});
+};
+function driverKeyOf(sh){ return sh.driverId?normId(sh.driverId):(sh.driver||""); }
+// 本日の便を全端末分まとめる（Firebaseの記録 + この端末の未同期分）
+let dayAll=[], dayAllAt=0, dayAllRemote=false;
+async function fetchDayAll(){
+  const map=new Map();
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"); const v=await r.json();
+    if(v&&typeof v==="object"){
+      Object.values(v).forEach(j=>{ if(!j||!j.key||isGone(j.key)) return;
+        map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
+          scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
+          c3:j.c3||0,c5:j.c5||0,
+          startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,exportedAt:j.exportedAt||null,_remote:true,_key:j.key,_dev:j.device||""}); });
+      dayAllRemote=true;
+    }
+  }catch(e){ dayAllRemote=false; }
+  S.shifts.forEach(sh=>{ map.set(shiftKey(sh),sh); });   // この端末の分は常に最新を優先
+  dayAll=Array.from(map.values()).sort((a,b)=>(a.startedAt||0)-(b.startedAt||0));
+  dayAllAt=Date.now();
+}
+function openSummary(){
+  fetchDayAll().then(()=>paintSummary());
+  dayAll=S.shifts.slice(); dayAllRemote=false; paintSummary();
+}
+function paintSummary(){
+  $("btnCallSum").textContent=(SET.postName||"郵便局")+"へ発信"; $("btnCallSum").disabled=!(SET.postTel||"").trim();
+  $("btnCancelShift").className="btn wide danger"+(inScan()?"":" hide");
+  $("cancelNote").className="note"+(inScan()?"":" hide");
+  const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
+  // ドライバー選択：既定は開始画面に入っている人（無ければ最後の便の人）
+  const people=[]; dayAll.forEach(sh=>{ const k=driverKeyOf(sh); if(k&&!people.some(p=>p.k===k)) people.push({k:k,n:sh.driver||k}); });
+  if(sumWho===null||!people.some(p=>p.k===sumWho)){
+    const curId=normId($("sId")?.value||""), curNm=($("sDrv")?.value||"").trim();
+    const hit=people.find(p=>p.k===curId)||people.find(p=>p.n===curNm)||(people.length?people[people.length-1]:null);
+    sumWho=people.length>1&&hit?hit.k:"__all";
+  }
+  const who=$("sumWho");
+  who.innerHTML=people.map(p=>'<option value="'+p.k+'"'+(sumWho===p.k?" selected":"")+">"+p.n+"</option>").join("")+
+    '<option value="__all"'+(sumWho==="__all"?" selected":"")+">全員</option>";
+  who.onchange=()=>{ sumWho=who.value; paintSummary(); };
+  const list=sumWho==="__all"?dayAll:dayAll.filter(sh=>driverKeyOf(sh)===sumWho);
+  let t3=0,t5=0;
+  tb.innerHTML=list.length?list.map(sh=>{
+    const c=cnt(sh), a=c.a, b=c.b;
+    t3+=a;t5+=b;
+    return "<tr><td>"+sh.bin+"<br><span style='font-size:11px;color:#4A5B6B'>"+(sh.driver||"")+"</span></td><td class='num'>"+a+"</td><td class='num'>"+b+"</td><td class='num'>"+(a+b)+"</td></tr>";
+  }).join(""):"<tr><td colspan='4'>まだ便がありません</td></tr>";
+  tf.innerHTML="<tr><td>"+(sumWho==="__all"?"本日合計":"本人合計")+"</td><td class='num'>"+t3+"</td><td class='num'>"+t5+"</td><td class='num'>"+(t3+t5)+"</td></tr>";
+  $("sumNote").textContent="差出票へ転記：3cm "+t3+"個、5cm "+t5+"個、計 "+(t3+t5)+"個"+
+    (dayAllRemote?"（全端末の本日分）":"（通信できないため、この端末の分のみ）");
+
+  $("times").innerHTML=list.length?list.map(sh=>{
+    return '<div class="row"><span style="flex:1"><b>'+sh.bin+"</b> "+(sh.driver||"")+
+      '<br><span style="font-size:12px;color:#4A5B6B">開始 '+hhmm(sh.startedAt)+
+      "　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+(sh._remote?"　別端末":"")+"</span></span></div>";
+  }).join(""):'<p class="note">なし</p>';
+
+  $("endLog").innerHTML=S.ends.length?S.ends.map(e=>
+    '<div class="row"><span style="flex:1"><b>'+e.driver+"</b>"+(e.tel?' <span style="font-size:12px;color:#4A5B6B">'+e.tel+"</span>":"")+
+    '</span><span class="tm num" style="font-size:14px;font-weight:700">'+hhmm(e.ts)+"</span></div>").join("")
+    :'<p class="note">なし</p>';
+
+  $("dupLog").innerHTML=S.dupLog.length?S.dupLog.map(d=>
+    '<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1">'+
+    '<b class="num">'+fmt(d.no)+"</b><br>"+
+    '<span style="font-size:12px;color:#4A5B6B">検知 '+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join("")
+    :'<p class="note">なし</p>';
+
+  $("delLog").innerHTML=S.delLog.length?S.delLog.slice().reverse().map(d=>
+    '<div class="row del"><span style="flex:1"><b class="num">'+fmt(d.no)+"</b> "+
+    '<span class="tag tag'+d.size+'">'+d.size+'cm</span>'+
+    '<br><span style="font-size:12px;color:#4A5B6B">'+d.kind+" "+hms(d.delTs)+"　読取 "+hms(d.ts)+"（"+d.bin+(d.driver?" / "+d.driver:"")+"）</span></span></div>").join("")
+    :'<p class="note">なし</p>';
+
+  openSheet("shSum");
+}
+
+/* ---------- CSV ---------- */
+const CSVHEAD="日付,便,ドライバー,ID,企業,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
+function csvBody(day,shifts,withLogs){
+  let out="";
+  shifts.forEach(sh=>{
+    const base=[day.date,sh.bin,sh.driver,sh.driverId||"",corpName(sh.corp),sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
+    (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
+  });
+  if(withLogs)(day.dupLog||[]).forEach(x=>{
+    out+=[day.date,x.bin,"","","","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
+  });
+  return out;
+}
+function download(name,text){
+  const blob=new Blob(["\uFEFF"+text],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+}
+
+/* ---------- 提出用CSV ---------- */
+const ORG="osakakyuhai";
+const SUBHEAD="日付,便,ドライバー,サイズcm,お問い合わせ番号,読取時刻\n";
+function binNo(day,sh){
+  const m=String(sh.bin).match(/(\d+)/);
+  if(m) return m[1];
+  return String(day.shifts.indexOf(sh)+1);
+}
+const ymd=d=>String(d).replace(/-/g,"");
+function csvSubmit(day,shifts){
+  let out=SUBHEAD;
+  shifts.forEach(sh=>{
+    (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>{
+      out+=[day.date,sh.bin,sh.driver,x.size,x.no,hms(x.ts)].join(",")+"\n";
+    });
+  });
+  return out;
+}
+function submitName(day,shifts){
+  if(shifts.length===1) return ORG+"_"+ymd(day.date)+"_bin"+binNo(day,shifts[0])+".csv";
+  return ORG+"_"+ymd(day.date)+".csv";
+}
+async function exportSubmit(day,shifts){
+  if(!shifts.length){ notify("書き出す便がありません",""); return; }
+  const rows=shifts.reduce((n,sh)=>{ const c=cnt(sh); return n+c.a+c.b; },0);
+  if(!rows){ notify("読取が0件です","この範囲には番号がありません。"); return; }
+  const ok=await ensureScans(day.date,shifts);
+  if(!ok){ notify("番号を取得できませんでした","電波のある場所でもう一度書き出してください。"); return; }
+  download(submitName(day,shifts),csvSubmit(day,shifts));
+  markExported(day,shifts);
+}
+
+/* ---------- 管理画面 ---------- */
+// 企業コード（社内用。ドライバー画面には社名を出さない）
+const CORPS={"1":"大阪急配","2":"株式会社UP","9":"その他"};
+const corpName=c=>CORPS[String(c||"").trim()]||(c?"未登録("+c+")":"未入力");
+// IDから企業を判定：10001-xxx / 10001 → UP、4〜5桁の数字のみ → 弊社、それ以外 → その他
+function corpFromId(id){
+  const t=String(id||"").replace(/[－ー–—]/g,"-").trim();
+  if(!t) return "";
+  const d=(typeof findDriver==="function")?findDriver(t):null;
+  if(d&&d.company){ if(/大阪急配/.test(d.company)) return "1"; if(/UP/i.test(d.company)) return "2"; return "9"; }
+  if(/^10001(-|$)/.test(t)) return "2";
+  if(/^\d{4,5}$/.test(t)) return "1";
+  return "9";
+}
+const normId=id=>String(id||"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[－ー–—]/g,"-").trim();
+
+const PIN_STAFF="1108";   // 大阪急配（社内）
+const PIN_CLIENT="0981";  // お客様（閲覧・提出用CSVのみ）
+let adminOK=false, isStaff=false, admArchive=[], admDate=null;
+
+let admRemoteDates=[], admCurDay=null;
+async function fetchRemoteDates(){
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
+    const v=await r.json();
+    admRemoteDates=v?Object.keys(v).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)):[];
+  }catch(e){}
+}
+async function fetchDayMerged(date){
+  const map=new Map();
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_scan/"+date+".json"); const v=await r.json();
+    if(v&&typeof v==="object") Object.values(v).forEach(j=>{
+      if(!j||!j.key||isGone(j.key)) return;
+      map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
+        scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
+        c3:j.c3||0,c5:j.c5||0,
+        startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,
+        exportedAt:j.exportedAt||null,registered:j.registered!==false,_remote:true,_key:j.key});
+    });
+  }catch(e){}
+  const local=(date===S.date)?S:admArchive.find(x=>x.date===date);
+  if(local)(local.shifts||[]).forEach(sh=>map.set(shiftKey(sh),sh));
+  return {date:date,shifts:Array.from(map.values()).sort((a,b)=>(a.startedAt||0)-(b.startedAt||0)),
+          ends:(local&&local.ends)||[],dupLog:(local&&local.dupLog)||[],delLog:(local&&local.delLog)||[],
+          _local:local||null};
+}
+async function ensureScans(date,shifts){
+  const need=shifts.filter(sh=>!Array.isArray(sh.scans));
+  if(!need.length) return true;
+  try{
+    const r=await fetch(FB_URL+"/nikki/jet_scan_nos/"+date+".json");
+    const v=(await r.json())||{};
+    need.forEach(sh=>{
+      const a=v[sh._key];
+      sh.scans=Array.isArray(a)?a.map(x=>({no:x.n||x.no,size:x.s||x.size,ts:x.t||x.ts})):[];
+    });
+    return true;
+  }catch(e){
+    need.forEach(sh=>{ if(!Array.isArray(sh.scans)) sh.scans=[]; sh._stripped=true; });
+    return false;
+  }
+}
+function buildLocalDay(date){
+  const local=(date===S.date)?S:admArchive.find(x=>x.date===date);
+  return {date:date,shifts:local?local.shifts.slice():[],ends:(local&&local.ends)||[],
+          dupLog:(local&&local.dupLog)||[],delLog:(local&&local.delLog)||[],_local:local||null};
+}
+function updateDateNote(){
+  const set=new Set(admArchive.map(d=>d.date)); set.add(S.date);
+  admRemoteDates.forEach(d=>set.add(d));
+  $("admDateNote").textContent="記録のある日："+Array.from(set).sort().reverse().join("、");
+}
+function readArchive(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(AKEY)||"[]");
+    const fixed=dedupeDays(raw);
+    if(fixed.length!==raw.length) localStorage.setItem(AKEY,JSON.stringify(fixed));
+    return fixed;
+  }catch(e){ return []; }
+}
+function writeArchive(a){ try{ localStorage.setItem(AKEY,JSON.stringify(a)); }catch(e){} }
+function allDays(){ return readArchive().concat([S]); }
+function dayByDate(d){ if(d===S.date) return S; return admArchive.find(x=>x.date===d)||null; }
+function persistDay(day){ if(day===S){ save(); } else { writeArchive(admArchive); } }
+function markExported(day,shifts){
+  const now=Date.now();
+  shifts.forEach(sh=>{
+    sh.exportedAt=now;
+    if(sh._remote){
+      fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+sh._key+".json",
+        {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({exportedAt:now})}).catch(()=>{});
+    }else if(day.date===S.date){ sh._dirty=now; }
+  });
+  if(day._local&&day._local!==S) writeArchive(admArchive);
+  if(day.date===S.date){ save(); scheduleSync(500); }
+  if($("shAdmin").classList.contains("on")) renderAdmin();
+}
+const cnt=sh=>{
+  if(!Array.isArray(sh.scans)||sh._stripped) return {a:sh.c3||0,b:sh.c5||0};
+  if(typeof sh.c3==="number"&&typeof sh.c5==="number"&&sh.c3+sh.c5===sh.scans.length) return {a:sh.c3,b:sh.c5};
+  const a=sh.scans.filter(x=>x.size===3).length, b=sh.scans.length-a;
+  sh.c3=a; sh.c5=b; return {a:a,b:b};
+};
+
+$("btnAdmin").onclick=()=>{
+  if(!adminOK){
+    ask({title:"管理画面",body:"暗証番号を入力してください。",input:true,okText:"開く",
+      onOk:v=>{
+        const t=String(v).trim();
+        if(t===PIN_STAFF){ isStaff=true; }
+        else if(t===PIN_CLIENT){ isStaff=false; }
+        else { notify("暗証番号が違います",""); return; }
+        adminOK=true; openAdmin();
+      }});
+    return;
+  }
+  openAdmin();
+};
+function openAdmin(){
+  $("setPostName").value=SET.postName||""; $("setPostTel").value=SET.postTel||"";
+  loadSettings(true).then(()=>{ if(!$("setPostName").value)$("setPostName").value=SET.postName||""; if(!$("setPostTel").value)$("setPostTel").value=SET.postTel||""; paintCall(); });
+  fetchRemoteDates().then(updateDateNote);
+  admArchive=readArchive();
+  const days=Array.from(new Set(admArchive.map(d=>d.date).filter(d=>d!==S.date))).concat([S.date]).reverse();
+  admDate=admDate&&days.includes(admDate)?admDate:S.date;
+  $("admDate").value=admDate;
+  updateDateNote();
+  renderAdmin(); openSheet("shAdmin");
+}
+$("admDate").onchange=function(){ admDate=this.value||S.date; this.blur(); renderAdmin(); };
+$("admDate").addEventListener("click",function(){ try{ if(this.showPicker&&!("ontouchstart" in window)) this.showPicker(); }catch(e){} });
+$("btnAdmLogout").onclick=()=>{ adminOK=false; isStaff=false; closeSheets(); notify("ログアウトしました","次回は暗証番号の入力から始まります。"); };
+// 管理画面は操作が15分止まったら自動ログアウト（共用端末で開きっぱなし対策）
+let admLast=Date.now();
+["pointerdown","keydown","touchstart"].forEach(ev=>document.addEventListener(ev,()=>{ admLast=Date.now(); },{passive:true}));
+setInterval(()=>{
+  if(adminOK && Date.now()-admLast>15*60*1000){
+    adminOK=false; isStaff=false;
+    if($("shAdmin").classList.contains("on")||$("shDetail").classList.contains("on")) closeSheets();
+  }
+},30000);
+
+function corpBreakdown(day){
+  const m=new Map();
+  day.shifts.forEach(sh=>{
+    const k=corpName(sh.corp), c=cnt(sh);
+    const v=m.get(k)||{n:0,q:0};
+    v.n+=1; v.q+=c.a+c.b; m.set(k,v);
+  });
+  if(m.size<=1&&day.shifts.length<=1) return "";
+  return '<div style="margin-top:10px;font-size:13px;color:#4A5B6B;font-weight:600">企業別</div>'+
+    Array.from(m.entries()).map(([k,v])=>
+      '<div style="font-size:14px">'+k+"　"+v.n+"便　"+v.q+"個</div>").join("");
+}
+function renderAdmin(){
+  paintAdminDay(buildLocalDay(admDate),false);
+  const want=admDate;
+  fetchDayMerged(want).then(day=>{ if(want===admDate) paintAdminDay(day,true); });
+}
+function paintAdminDay(day,remoteLoaded){
+  admCurDay=day;
+  $("admInternal").className=isStaff?"":"hide";
+  if(!day.shifts.length){
+    $("admSummary").innerHTML='<p class="note">'+(remoteLoaded?"この日のデータがありません":"読み込み中")+'</p>';
+    $("admList").innerHTML=""; return;
+  }
+  let t3=0,t5=0,todo=0;
+  day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; if(sh.closed&&!sh.exportedAt) todo++; });
+  $("admSummary").innerHTML='<div class="metabox sumcard" id="sumCard">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:13px;color:#4A5B6B;font-weight:600">'+admDate+' の合計</div>'+
+    '<div style="font-size:12px;color:var(--blue);font-weight:700">タップで全便の番号一覧 ›</div></div>'+
+    '<div style="font-size:30px;font-weight:800;margin-top:2px">'+(t3+t5)+'<span style="font-size:15px;font-weight:600"> 個</span></div>'+
+    '<div style="font-size:14px;margin-top:2px">3cm '+t3+"　5cm "+t5+"　便数 "+day.shifts.length+"</div>"+
+    (todo?'<div class="badge b-todo" style="margin-top:8px">未書き出し '+todo+"便</div>":'<div class="badge b-done" style="margin-top:8px">書き出し済み</div>')+
+    (isStaff?corpBreakdown(day):"")+
+    "</div>";
+  $("sumCard").onclick=()=>openDayDetail(day);
+
+  const ends=isStaff?(day.ends||[]):[];
+  $("admList").innerHTML=(day.shifts.length?day.shifts.map((sh,i)=>{
+    const c=cnt(sh);
+    const bad=sh.closed?(sh.exportedAt?'<span class="badge b-done">書き出し済 '+hhmm(sh.exportedAt)+"</span>":'<span class="badge b-todo">未書き出し</span>')
+                       :'<span class="badge b-open">計数中</span>';
+    const callBtn=(isStaff&&sh.tel)?' <a class="btn sm" style="padding:4px 10px;margin-left:6px;text-decoration:none;color:var(--blue);border-color:#8FB4D8;background:var(--blue-bg)" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'" onclick="event.stopPropagation()">発信</a>':"";
+    const pick=isStaff?'<input type="checkbox" class="pick" data-k="'+keyOf(sh)+'" onclick="event.stopPropagation()" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px">':"";
+    return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+pick+sh.bin+"　"+(sh.driver||"")+callBtn+"</div>"+
+      '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
+      (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+
+      ((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
+      '<div class="hint">タップで読取一覧とCSV</div>'+
+      '</div><div class="qty num">'+(c.a+c.b)+'</div><div class="chev">›</div></div>';
+  }).join(""):'<p class="note">便がありません</p>')+
+    (ends.length?'<div class="lhead" style="margin-top:10px">業務終了</div>'+ends.map(e=>
+      '<div class="row"><span style="flex:1"><b>'+e.driver+'</b></span><span class="tm num" style="font-size:14px;font-weight:700">'+hhmm(e.ts)+"</span></div>").join(""):"");
+  $("admList").querySelectorAll("[data-i]").forEach(r=>r.onclick=()=>openDetail(day,parseInt(r.getAttribute("data-i"),10)));
+}
+
+let detCur=null;
+
+function detAllScans(){
+  if(!detCur) return [];
+  if(detCur.all) return detCur.day.shifts.flatMap(sh=>(Array.isArray(sh.scans)?sh.scans:[]).map(x=>Object.assign({},x,{_bin:sh.bin,_drv:sh.driver||""})));
+  return Array.isArray(detCur.sh.scans)?detCur.sh.scans:[];
+}
+function paintDetScans(){
+  if(!detCur) return;
+  const all=detAllScans(), q=digitsOf($("detSearch").value);
+  const src=(q?all.filter(x=>x.no.includes(q)):all).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const rowHtml=x=>'<div class="row"><span class="no num">'+fmt(x.no)+
+    (detCur.all?'<div style="font-size:11px;color:#4A5B6B;font-weight:500">'+x._bin+"　"+x._drv+"</div>":"")+'</span>'+
+    '<span class="tag tag'+x.size+'">'+x.size+'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>";
+  $("detScans").innerHTML=all.length
+    ?(src.length?src.map(rowHtml).join("")+'<p class="note">'+src.length+"件"+(q?" 該当 / 全 "+all.length+"件":"")+"</p>"
+      :'<p class="note">該当する番号はありません</p>')
+    :'<p class="note">なし</p>';
+}
+$("detSearch").addEventListener("input",paintDetScans);
+$("detSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("detSearch").blur(); } });
+function shrinkImage(file,longEdge,quality){
+  return new Promise((resolve,reject)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>reject(new Error("読み込み失敗"));
+    fr.onload=()=>{
+      const img=new Image();
+      img.onerror=()=>reject(new Error("画像を開けません"));
+      img.onload=()=>{
+        let w=img.width,h=img.height; const sc=Math.min(1,longEdge/Math.max(w,h));
+        w=Math.round(w*sc); h=Math.round(h*sc);
+        const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+        const ctx=cv.getContext("2d"); ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+        resolve(cv.toDataURL("image/jpeg",quality));
+      };
+      img.src=fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+let phSh=null, phPhotos={};
+function photoPathFor(day,sh){ return FB_URL+"/nikki/jet_photos/"+day.date+"/"+keyOf(sh); }
+function openPhotoSheet(){
+  if(!S.shifts.length){ notify("便がありません","便を始めて締めてから提出してください。"); return; }
+  // 対象は今日の便。開始画面に入っている人の便を優先し、直近の締め済み便を初期選択
+  const curId=normId($("sId").value), curNm=($("sDrv").value||"").trim();
+  let list=S.shifts.filter(sh=>(curId&&sh.driverId&&normId(sh.driverId)===curId)||(!curId&&curNm&&sh.driver===curNm));
+  if(!list.length) list=S.shifts.slice();
+  const closed=list.filter(sh=>sh.closed);
+  phSh=(closed.length?closed[closed.length-1]:list[list.length-1]);
+  const sel=$("phShift");
+  sel.innerHTML=list.map(sh=>'<option value="'+sh.id+'"'+(sh===phSh?" selected":"")+">"+sh.bin+"　"+(sh.driver||"")+(sh.closed?"（締め "+hhmm(sh.closedAt)+"）":"（計数中）")+"</option>").join("");
+  sel.onchange=()=>{ phSh=S.shifts.find(sh=>String(sh.id)===sel.value)||phSh; loadPhPhotos(); };
+  openSheet("shPhoto"); loadPhPhotos();
+}
+async function loadPhPhotos(){
+  phPhotos={}; $("phList").innerHTML='<p class="note">読み込み中</p>';
+  try{ const r=await fetch(photoPathFor(S,phSh)+".json"); const v=await r.json(); if(v&&typeof v==="object") phPhotos=v; }catch(e){}
+  paintPhPhotos();
+}
+function paintPhPhotos(){
+  const el=$("phList"); const keys=Object.keys(phPhotos).sort();
+  el.innerHTML=keys.length?'<div class="chips">'+keys.map(k=>
+    '<span class="chip" style="padding:4px"><img src="'+(phPhotos[k].thumb||"")+'" style="height:72px;border-radius:4px;display:block">'+
+    '<button data-ph="'+k+'" style="color:#A8231C;font-weight:700">×</button></span>').join("")+"</div>"+
+    '<p class="note">'+keys.length+"枚 提出済み</p>":'<p class="note">写真なし</p>';
+  el.querySelectorAll("[data-ph]").forEach(b=>b.onclick=()=>{
+    const k=b.getAttribute("data-ph");
+    ask({title:"この写真を取り消します",body:"",okText:"取り消す",danger:true,onOk:async()=>{
+      try{ await fetch(photoPathFor(S,phSh)+"/"+k+".json",{method:"DELETE"}); }catch(e){}
+      delete phPhotos[k]; paintPhPhotos();
+    }});
+  });
+}
+$("btnPhoto").onclick=openPhotoSheet;
+$("phTake").onclick=()=>$("phFile").click();
+$("phFile").onchange=async e=>{
+  const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f||!phSh) return;
+  $("phTake").disabled=true; $("phTake").textContent="保存中";
+  try{
+    const full=await shrinkImage(f,1400,.62), thumb=await shrinkImage(f,240,.6);
+    const id="p"+Date.now();
+    const body={full:full,thumb:thumb,at:Date.now(),by:"driver",bin:phSh.bin,driver:phSh.driver||"",driverId:phSh.driverId||""};
+    const r=await fetch(photoPathFor(S,phSh)+"/"+id+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error("save");
+    phPhotos[id]={thumb:thumb,at:body.at}; paintPhPhotos(); beep(880,80,.05);
+    notify("提出しました",phSh.bin+" の資料として保存しました。");
+  }catch(err){ notify("保存できませんでした","電波を確認して、もう一度撮影してください。"); }
+  $("phTake").disabled=false; $("phTake").textContent="撮影して提出する";
+};
+function openDayDetail(day){
+  detCur={day:day,sh:null,all:true};
+  $("detInternal").className=isStaff?"":"hide";
+  $("detDelWrap").className="hide";
+  let t3=0,t5=0; day.shifts.forEach(sh=>{ const c=cnt(sh); t3+=c.a; t5+=c.b; });
+  $("detTitle").textContent=day.date+"　全便";
+  $("detMeta").innerHTML='<div class="metabox">'+
+    '<div style="font-size:20px;font-weight:800">3cm '+t3+"　5cm "+t5+"　計 "+(t3+t5)+"</div>"+
+    '<div style="font-size:14px;margin-top:4px">便数 '+day.shifts.length+"</div>"+
+    day.shifts.map(sh=>{ const c=cnt(sh); return '<div style="font-size:13px;color:#4A5B6B;margin-top:2px">'+sh.bin+"　"+(sh.driver||"")+"　"+(c.a+c.b)+"個</div>"; }).join("")+
+    "</div>";
+  $("detSearch").value="";
+  $("detScans").innerHTML='<p class="note">番号を読み込み中</p>';
+  ensureScans(day.date,day.shifts).then(ok=>{ paintDetScans(); if(!ok) notify("番号を取得できませんでした","個数は表示できますが、番号一覧は電波のある場所で開き直してください。"); });
+  const dl=day.dupLog||[];
+  $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
+    fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">'+d.bin+"　検知 "+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
+  const xl=day.delLog||[];
+  $("detDel").innerHTML=xl.length?xl.map(d=>'<div class="row del"><span style="flex:1"><b class="num">'+fmt(d.no)+"</b> "+
+    '<span class="tag tag'+d.size+'">'+d.size+'cm</span><br><span style="font-size:12px;color:#4A5B6B">'+d.bin+"　"+d.kind+" "+hms(d.delTs)+"</span></span></div>").join(""):'<p class="note">なし</p>';
+  closeSheets(); openSheet("shDetail");
+}
+function openDetail(day,i){
+  const sh=day.shifts[i], c=cnt(sh);
+  detCur={day:day,sh:sh};
+  $("detInternal").className=isStaff?"":"hide";
+  $("detDelWrap").className=isStaff?"":"hide";
+  $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
+  $("detMeta").innerHTML='<div class="metabox">'+
+    '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
+    '<div style="font-size:20px;font-weight:800;margin-top:4px">3cm '+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"</div>"+
+    (isStaff?'<div style="margin-top:6px;font-size:14px;font-weight:700">'+corpName(sh.corp)+(sh.driverId?'<span style="font-weight:500;color:#4A5B6B">　ID '+sh.driverId+"</span>":"")+"</div>":"")+
+    ((isStaff&&sh.tel)?'<div style="margin-top:6px"><a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">'+sh.tel+" に発信</a></div>":"")+
+    (sh.exportedAt?'<div class="badge b-done" style="margin-top:8px">書き出し済 '+hhmm(sh.exportedAt)+"</div>":"")+
+    "</div>";
+  $("detSearch").value="";
+  if(!Array.isArray(sh.scans)){
+    $("detScans").innerHTML='<p class="note">番号を読み込み中</p>';
+    ensureScans(day.date,[sh]).then(()=>paintDetScans());
+  }else paintDetScans();
+  const dl=(day.dupLog||[]).filter(d=>d.bin===sh.bin);
+  $("detDup").innerHTML=dl.length?dl.map(d=>'<div class="row" style="background:#F7D6D2;border-color:#E0A9A3"><span style="flex:1"><b class="num">'+
+    fmt(d.no)+'</b><br><span style="font-size:12px;color:#4A5B6B">検知 '+hms(d.ts)+"　初回 "+hms(d.firstTs)+"（"+d.firstBin+"）</span></span></div>").join(""):'<p class="note">なし</p>';
+  const xl=(day.delLog||[]).filter(d=>d.bin===sh.bin);
+  $("detDel").innerHTML=xl.length?xl.map(d=>'<div class="row del"><span style="flex:1"><b class="num">'+fmt(d.no)+"</b> "+
+    '<span class="tag tag'+d.size+'">'+d.size+'cm</span><br><span style="font-size:12px;color:#4A5B6B">'+d.kind+" "+hms(d.delTs)+
+    "　読取 "+hms(d.ts)+"</span></span></div>").join(""):'<p class="note">なし</p>';
+  closeSheets(); openSheet("shDetail");
+}
+$("detBack").onclick=()=>{ closeSheets(); openSheet("shAdmin"); };
+$("detDelete").onclick=()=>{
+  if(!isStaff||!detCur) return;
+  const day=detCur.day, sh=detCur.sh, n=sh.scans.length;
+  ask({title:sh.bin+"（"+sh.driver+"）を削除します",
+    body:day.date+"　読取 "+n+"件\nこの便は記録から消え、計上からも外れます。",
+    okText:"削除に進む",danger:true,
+    onOk:()=>{ ask({title:"本当に削除しますか",body:"元に戻せません。削除の記録にだけ残ります。",okText:"削除を実行する",danger:true,
+      onOk:async()=>{
+        const now=Date.now();
+        const local=(day.date===S.date)?S:admArchive.find(d=>d.date===day.date);
+        if(local){
+          local.delLog=local.delLog||[];
+          (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>local.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"便削除"}));
+          local.shifts=local.shifts.filter(x=>keyOf(x)!==keyOf(sh));
+        }
+        day.shifts=day.shifts.filter(x=>x!==sh);
+        if(day.date===S.date){ if(S.active>=0&&!S.shifts[S.active]) S.active=-1; seenIdx=null; save(); } else { writeArchive(admArchive); }
+        await fbDeleteShift(day,sh);
+        closeSheets(); openAdmin();
+        notify("便を削除しました",sh.bin+"（"+sh.driver+"）を削除の記録に残しました。");
+        if(day.date===S.date) showView();
+      }}); }});
+};
+$("detSub").onclick=()=>{
+  if(!detCur) return;
+  const list=detCur.all?detCur.day.shifts:[detCur.sh];
+  const rows=list.reduce((n,sh)=>{ const c=cnt(sh); return n+c.a+c.b; },0);
+  if(!rows){ notify("書き出す読取がありません",""); return; }
+  ask({title:(detCur.all?detCur.day.date+" 全便":detCur.sh.bin)+" のCSVを書き出します",
+    body:"番号 "+rows+"件\nファイル名 "+submitName(detCur.day,list.filter(sh=>sh.scans.length)),okText:"書き出す",
+    onOk:()=>exportSubmit(detCur.day,list)});
+};
+function pickedKeys(){ return Array.from(document.querySelectorAll("#admList .pick:checked")).map(b=>b.getAttribute("data-k")); }
+document.addEventListener("change",e=>{
+  if(e.target&&e.target.classList&&e.target.classList.contains("pick")){
+    const n=pickedKeys().length, b=$("btnDelPicked");
+    b.className="btn wide danger"+(n?"":" hide");
+    b.textContent="選択した便を削除する（"+n+"便）";
+  }
+});
+$("btnDelPicked").onclick=()=>{
+  if(!isStaff||!admCurDay) return;
+  const keys=pickedKeys(); if(!keys.length) return;
+  const day=admCurDay;
+  const list=day.shifts.filter(sh=>keys.includes(keyOf(sh)));
+  const rows=list.reduce((n,sh)=>{ const c=cnt(sh); return n+c.a+c.b; },0);
+  ask({title:list.length+"便を削除します",
+    body:day.date+"\n"+list.map(sh=>sh.bin+"　"+(sh.driver||"")).join("\n")+"\n読取 "+rows+"件",
+    okText:"削除に進む",danger:true,
+    onOk:()=>{ ask({title:"本当に削除しますか",body:"元に戻せません。削除の記録にだけ残ります。",okText:"削除を実行する",danger:true,
+      onOk:async()=>{
+        const now=Date.now();
+        const local=(day.date===S.date)?S:admArchive.find(d=>d.date===day.date);
+        for(const sh of list){
+          if(local){
+            local.delLog=local.delLog||[];
+            (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>local.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"便削除"}));
+            local.shifts=local.shifts.filter(x=>keyOf(x)!==keyOf(sh));
+          }
+          await fbDeleteShift(day,sh);
+        }
+        if(day.date===S.date){ if(S.active>=0&&!S.shifts[S.active]) S.active=-1; seenIdx=null; save(); showView(); }
+        else writeArchive(admArchive);
+        $("btnDelPicked").className="btn wide danger hide";
+        renderAdmin();
+        notify(list.length+"便を削除しました","");
+      }}); }});
+};
+$("btnSubDay").onclick=()=>{ if(admCurDay) exportSubmit(admCurDay,admCurDay.shifts); };
+// 便ごとのCSVを1つのZIPにまとめる（無圧縮・外部ライブラリ不要）
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
+function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=CRC_T[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+function makeZip(files){   // files: [{name, text}]
+  const enc=new TextEncoder(); const parts=[]; const central=[]; let offset=0;
+  const d=new Date(); const dosTime=((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1))&0xFFFF;
+  const dosDate=(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF;
+  const u16=v=>[v&255,(v>>8)&255], u32=v=>[v&255,(v>>8)&255,(v>>16)&255,(v>>>24)&255];
+  files.forEach(f=>{
+    const name=enc.encode(f.name), data=enc.encode("\uFEFF"+f.text), crc=crc32(data);
+    const local=new Uint8Array([0x50,0x4B,0x03,0x04,...u16(20),...u16(0x0800),...u16(0),...u16(dosTime),...u16(dosDate),
+      ...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0)]);
+    parts.push(local,name,data);
+    central.push(new Uint8Array([0x50,0x4B,0x01,0x02,...u16(20),...u16(20),...u16(0x0800),...u16(0),...u16(dosTime),...u16(dosDate),
+      ...u32(crc),...u32(data.length),...u32(data.length),...u16(name.length),...u16(0),...u16(0),...u16(0),...u16(0),...u32(0),...u32(offset)]),name);
+    offset+=local.length+name.length+data.length;
+  });
+  const cdStart=offset; let cdLen=0; central.forEach(c=>cdLen+=c.length);
+  const end=new Uint8Array([0x50,0x4B,0x05,0x06,...u16(0),...u16(0),...u16(files.length),...u16(files.length),...u32(cdLen),...u32(cdStart),...u16(0)]);
+  return new Blob([...parts,...central,end],{type:"application/zip"});
+}
+$("btnSubZip").onclick=()=>{
+  const day=admCurDay; if(!day) return;
+  const list=day.shifts.filter(sh=>{ const c=cnt(sh); return c.a+c.b>0; });
+  if(!list.length){ notify("書き出す便がありません",""); return; }
+  ensureScans(day.date,list).then(ok=>{
+  if(!ok){ notify("番号を取得できませんでした","電波のある場所でもう一度お試しください。"); return; }
+  const files=list.map(sh=>({name:submitName(day,[sh]),text:csvSubmit(day,[sh])}));
+  const blob=makeZip(files); const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=ORG+"_"+ymd(day.date)+"_bins.zip"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+  markExported(day,list);
+  notify("ZIPに"+files.length+"ファイルをまとめました","便ごとのCSVが1ファイルずつ入っています。");
+  });
+};
+$("btnSubNew").onclick=()=>{
+  const day=admCurDay; if(!day) return;
+  const list=day.shifts.filter(sh=>sh.closed&&!sh.exportedAt);
+  if(!list.length){ notify("未書き出しの便はありません",""); return; }
+  exportSubmit(day,list);
+};
+$("btnSubToday").onclick=()=>exportSubmit(S,sumWho==="__all"||sumWho===null?dayAll:dayAll.filter(sh=>driverKeyOf(sh)===sumWho));
+
+$("btnExpDay").onclick=()=>{
+  if(!isStaff) return;
+  const day=admCurDay; if(!day||!day.shifts.length) return;
+  download("jet_"+day.date+".csv",CSVHEAD+csvBody(day,day.shifts,true));
+  markExported(day,day.shifts);
+};
+$("btnSavePost").onclick=async()=>{
+  if(!isStaff) return;
+  const name=$("setPostName").value.trim(), tel=$("setPostTel").value.trim();
+  const ok=await saveSettings({postName:name,postTel:tel});
+  $("setPostMsg").textContent=ok?"保存しました（全端末に反映されます）":"端末には保存しましたが、共有への保存に失敗しました。電波を確認して再度保存してください";
+  $("setPostMsg").style.color=ok?"#1D6B45":"#A8231C";
+  paintCall();
+};
+async function wipeDate(date){
+  if(admCurDay&&admCurDay.date===date) admCurDay.shifts.forEach(sh=>markGone(keyOf(sh)));
+  for(const node of ["jet_scan","jet_scan_nos","jet_photos"]){
+    try{ await fetch(FB_URL+"/nikki/"+node+"/"+date+".json",{method:"DELETE"}); }catch(e){}
+  }
+  if(date===S.date){ S=blank(); seenIdx=null; save(); }
+  else { admArchive=readArchive().filter(d=>d.date!==date); writeArchive(admArchive); }
+}
+$("btnWipeToday").onclick=()=>{
+  if(!isStaff) return;
+  const date=admDate, n=admCurDay?admCurDay.shifts.length:0;
+  if(!n){ notify("消すデータがありません",""); return; }
+  ask({title:date+" のデータを全消去します",body:"便 "+n+"件と、その読取・記録・写真がすべて消えます。\n全端末分が対象です。元に戻せません。",okText:"消去する",danger:true,
+    onOk:()=>{ ask({title:"本当に消去しますか",body:date+" のデータを消去します。",okText:"消去を実行する",danger:true,
+      onOk:async()=>{
+        await wipeDate(date);
+        if(date===S.date) showView();
+        renderAdmin();
+        notify(date+" のデータを消去しました","");
+      }}); }});
+};
+$("btnExpAll").onclick=async()=>{
+  if(!isStaff) return;
+  admArchive=readArchive();
+  const daysAll=admArchive.concat([S]);
+  // 端末から番号を落とした日はFirebaseから取り寄せてから書き出す
+  let missed=false;
+  for(const d of daysAll){
+    const need=d.shifts.filter(sh=>sh._stripped||!Array.isArray(sh.scans));
+    if(!need.length) continue;
+    need.forEach(sh=>{ sh._key=sh._key||shiftKey(sh); });
+    const ok=await ensureScans(d.date,need);
+    if(!ok) missed=true;
+    need.forEach(sh=>{ if(Array.isArray(sh.scans)&&sh.scans.length) sh._stripped=false; });
+  }
+  let out=CSVHEAD;
+  daysAll.forEach(d=>{ out+=csvBody(d,d.shifts,true); d.shifts.forEach(sh=>sh.exportedAt=Date.now()); });
+  writeArchive(admArchive); save();
+  download("jet_all.csv",out); renderAdmin();
+  if(missed) notify("一部の番号を取得できませんでした","古い日の番号が欠けている可能性があります。経営管理の月次CSVをご利用ください。");
+};
+
+/* ---------- 画面を消さない ---------- */
+async function wake(){ try{ if("wakeLock" in navigator) await navigator.wakeLock.request("screen"); }catch(e){} }
+wake();
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") wake(); });
+window.addEventListener("beforeunload",save);
+
+showView(); render(); scheduleSync(1500);
+try{ if(location.search&&history.replaceState) history.replaceState(null,"",location.pathname); }catch(e){}
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="バーコードSCAN">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<meta name="format-detection" content="telephone=no">
+<title>バーコード計数</title>
+<style>
+:root{
+  --bg:#EEF1F5; --card:#FFFFFF; --ink:#12212E; --ink-2:#4A5B6B; --line:#D3DBE3;
+  --blue:#14528F; --blue-bg:#DBE8F6; --amber:#8A4B00; --amber-bg:#FAE6CC;
+  --red:#A8231C; --red-bg:#F7D6D2; --warn:#7A5A00; --warn-bg:#FBEFC4;
+  --ok:#1D6B45; --ok-bg:#D8EEE2; --lock:#E3E7EC;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow-x:hidden;overscroll-behavior-y:none}
+body{
+  background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;
+  font-size:15px;line-height:1.45;display:flex;flex-direction:column;
+  position:fixed;inset:0;width:100%;height:100%;overflow:hidden;user-select:none;
+}
+.num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+.hide{display:none !important}
+
+header{background:var(--card);border-bottom:1px solid var(--line);padding:8px 12px;
+  display:flex;align-items:center;gap:8px;flex:0 0 auto}
+header .binfo{flex:1;min-width:0}
+header .bname{font-weight:700;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .bsub{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{border:1px solid var(--line);background:#F6F8FA;color:var(--ink);border-radius:8px;
+  padding:9px 12px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer}
+.btn:active{background:#E6EBF1}
+.btn.sm{padding:6px 10px;font-size:13px}
+.btn.dim{color:var(--ink-2);font-weight:500}
+.btn.wide{width:100%;margin-top:8px}
+.btn.go{background:var(--blue-bg);border-color:#8FB4D8;color:var(--blue);font-size:18px;padding:16px}
+.btn.photo{background:var(--amber-bg);border-color:#DDBE93;color:var(--amber);font-size:16px;padding:14px}
+.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.btn[disabled]{opacity:.45}
+
+/* start view */
+#vStart{flex:1;overflow-y:auto;padding:16px 14px 24px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.panel h1{font-size:17px;margin:0 0 12px}
+.field{margin-bottom:12px}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:4px}
+.field input{width:100%;padding:12px;font-size:17px;font-family:inherit;color:var(--ink);
+  border:1px solid var(--line);border-radius:8px;background:#FBFCFD}
+.field input:focus{outline:2px solid var(--blue)}
+.prev{margin-top:14px;font-size:13px;color:var(--ink-2)}
+.prev b{color:var(--ink)}
+
+/* counters */
+.counts{display:flex;gap:8px;padding:10px 12px 0;flex:0 0 auto}
+.cbox{flex:1;background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px 10px;text-align:center}
+.cbox .lab{font-size:12px;color:var(--ink-2);font-weight:600}
+.cbox .val{font-size:34px;font-weight:800;line-height:1.05;letter-spacing:-.02em}
+.cbox.t3{border-color:#A9C4E0;background:var(--blue-bg)}
+.cbox.t3 .val,.cbox.t3 .lab{color:var(--blue)}
+.cbox.t5{border-color:#DDBE93;background:var(--amber-bg)}
+.cbox.t5 .val,.cbox.t5 .lab{color:var(--amber)}
+.cbox.tt .val{font-size:38px}
+
+.band{margin:10px 12px 0;border-radius:10px;padding:10px 12px;border:1px solid var(--line);
+  background:var(--card);min-height:64px;display:flex;flex-direction:column;justify-content:center}
+.band .b1{font-size:15px;font-weight:700}
+.band .b2{font-size:20px;font-weight:700;letter-spacing:.04em;margin-top:2px}
+.band .b3{font-size:12px;color:var(--ink-2);margin-top:2px}
+.band.ok{background:var(--ok-bg);border-color:#A9D3BE}
+.band.ok .b1{color:var(--ok)}
+.band.dup{background:var(--red-bg);border-color:#E0A9A3}
+.band.dup .b1,.band.dup .b2{color:var(--red)}
+.band.warn{background:var(--warn-bg);border-color:#DFC97A}
+.band.warn .b1,.band.warn .b2{color:var(--warn)}
+.band .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+
+.modes{display:flex;gap:8px;padding:10px 12px 0;flex:0 0 auto}
+.mode{flex:1;border-radius:10px;border:2px solid var(--line);background:var(--card);
+  padding:12px 8px;font-family:inherit;font-size:17px;font-weight:700;color:var(--ink-2);cursor:pointer}
+.mode .hint{display:block;font-size:11px;font-weight:600;margin-top:2px}
+.mode.on3{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.mode.on5{border-color:var(--amber);background:var(--amber-bg);color:var(--amber)}
+
+.listwrap{flex:1 1 auto;overflow-y:auto;padding:10px 12px 92px;-webkit-overflow-scrolling:touch}
+.lhead{font-size:12px;font-weight:700;color:var(--ink-2);margin:2px 2px 6px;display:flex;justify-content:space-between}
+.row{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 10px;
+  margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.row .no{flex:1;font-size:16px;font-weight:600;letter-spacing:.03em}
+.row .tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;border:1px solid}
+.tag3{color:var(--blue);background:var(--blue-bg);border-color:#A9C4E0}
+.tag5{color:var(--amber);background:var(--amber-bg);border-color:#DDBE93}
+.row .tm{font-size:11px;color:var(--ink-2)}
+.row .x{border:none;background:none;color:var(--red);font-size:13px;font-weight:700;padding:4px 6px;cursor:pointer;font-family:inherit}
+.empty{color:var(--ink-2);font-size:13px;text-align:center;padding:24px 12px}
+
+footer{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+  padding:8px 12px calc(8px + env(safe-area-inset-bottom));display:flex;gap:8px;z-index:10}
+footer .btn{flex:1}
+
+/* lock */
+#lockView{position:fixed;inset:0;z-index:60;background:var(--lock);display:none;
+  flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+#lockView.on{display:flex}
+#lockView.dark{background:#000;color:#3C4A57}
+#lockView.dark .lt,#lockView.dark .lb,#lockView.dark .lcs{color:#3C4A57}
+#lockView.dark .lc{color:#7C8B99}
+#lockView.dark #unlock{background:#0C0F12;border-color:#242C34;color:#6C7B89}
+#lockView .eco{margin-top:16px;font-size:12px;color:var(--ink-2);text-decoration:underline;background:none;border:none;font-family:inherit}
+#lockView.dark .eco{color:#3C4A57}
+#lockView .lt{font-size:20px;font-weight:800;letter-spacing:.02em}
+#lockView .lb{font-size:13px;color:var(--ink-2);margin-top:6px}
+#lockView .lc{font-size:56px;font-weight:800;margin-top:22px;line-height:1}
+#lockView .lcs{font-size:13px;color:var(--ink-2);margin-top:4px}
+#unlock{margin-top:34px;position:relative;overflow:hidden;border:1px solid #B9C3CD;background:#F6F8FA;
+  touch-action:none;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  border-radius:10px;padding:18px 26px;font-size:16px;font-weight:700;color:var(--ink);font-family:inherit}
+#unlock .fill{position:absolute;left:0;top:0;bottom:0;width:0;background:#C8D8E8}
+#unlock span.t{position:relative}
+
+/* sheets */
+.scrim{position:fixed;inset:0;background:rgba(12,20,28,.45);display:none;z-index:20}
+.scrim.on{display:block}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:21;background:var(--bg);
+  border-radius:14px 14px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
+  max-height:88dvh;overflow-y:auto;display:none}
+.sheet.on{display:block}
 .sheet{overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 .listwrap{-webkit-overflow-scrolling:touch;overscroll-behavior:contain;overflow-x:hidden}
 .sheet.full{top:0;border-radius:0;max-height:none;padding-top:calc(8px + env(safe-area-inset-top))}
