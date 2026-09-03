@@ -254,7 +254,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <button class="btn wide hide" id="btnResume">計数中の便に戻る</button>
   <button class="btn wide" id="btnFinish">業務終了</button>
   <button class="btn wide dim" id="btnAdmin">管理画面</button>
-  <p class="note" id="verNote" style="text-align:center;margin-top:10px"></p>
+  <p class="note" id="postNote" style="text-align:center;margin-top:12px"></p>
+  <p class="note" id="verNote" style="text-align:center;margin-top:2px"></p>
 </div>
 
 <!-- ============ 計数画面 ============ -->
@@ -620,8 +621,18 @@ function paintCall(){
   const b=$("btnCall"); if(!b) return;
   b.disabled=!(SET.postTel||"").trim();
   b.title=SET.postName?SET.postName+"へ発信":"郵便局へ発信";
+  const n=$("postNote");
+  if(n){
+    const tel=(SET.postTel||"").trim();
+    n.textContent=tel?("発信先："+(SET.postName||"郵便局")+"　"+tel):"発信先が未設定です（管理画面で設定してください）";
+    n.style.color=tel?"#4A5B6B":"#A8231C";
+  }
 }
 loadSettings();
+// 発信先は他の端末で変更されることがあるため、開くたびと10分ごとに読み直す
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") loadSettings(); });
+window.addEventListener("online",()=>loadSettings());
+setInterval(loadSettings,10*60*1000);
 
 /* ---------- ID照合（日報アプリの登録データ） ---------- */
 const FB_URL="https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -770,7 +781,7 @@ document.addEventListener("focusin",e=>{
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-03.47";
+const APP_VER="2026-09-03.49";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -905,6 +916,7 @@ function setBand(cls,t,big,sub){
 function showView(){
   const scan=inScan();
   keepAwake(scan);
+  paintCall();
   $("vStart").className=scan?"hide":"";
   $("vScan").className=scan?"":"hide";
   if(scan) $("vScan").style.display="flex";
@@ -1382,7 +1394,7 @@ function paintSummary(){
   const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
   // ドライバー選択：既定は開始画面に入っている人（無ければ最後の便の人）
   const people=[]; dayAll.forEach(sh=>{ const k=driverKeyOf(sh); if(k&&!people.some(p=>p.k===k)) people.push({k:k,n:sh.driver||k}); });
-  if(sumWho===null||!people.some(p=>p.k===sumWho)){
+  if(sumWho===null||(sumWho!=="__all"&&!people.some(p=>p.k===sumWho))){
     const curId=normId($("sId")?.value||""), curNm=($("sDrv")?.value||"").trim();
     const hit=people.find(p=>p.k===curId)||people.find(p=>p.n===curNm)||(people.length?people[people.length-1]:null);
     sumWho=people.length>1&&hit?hit.k:"__all";
