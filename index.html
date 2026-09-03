@@ -265,6 +265,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <div class="bname" id="hBin">第1便</div>
       <div class="bsub" id="hSub"></div>
     </div>
+    <span class="bsub" id="lastRead" style="font-size:11px;white-space:nowrap"></span>
     <span class="bsub" id="syncDot" style="font-size:11px;white-space:nowrap"></span>
     <button class="btn sm" id="btnCall" title="郵便局へ発信">局へ発信</button>
     <button class="btn sm dim" id="btnMenu">集計</button>
@@ -617,8 +618,15 @@ async function loadSettings(){
 }
 async function saveSettings(patch){
   Object.assign(SET,patch); localStorage.setItem(SETKEY,JSON.stringify(SET));
-  const r=await fetch(FB_URL+"/nikki/jet_settings.json",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch)});
-  return r.ok;
+  try{
+    for(const k of Object.keys(patch)){          // 項目ごとに書く（他の設定を消さない）
+      const r=await fetch(FB_URL+"/nikki/jet_settings/"+k+".json",
+        {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch[k])});
+      if(!r.ok) return false;
+    }
+    const v=await (await fetch(FB_URL+"/nikki/jet_settings.json?_="+Date.now())).json();  // 保存できたか確認
+    return !!(v&&Object.keys(patch).every(k=>String(v[k]||"")===String(patch[k]||"")));
+  }catch(e){ return false; }
 }
 function paintCall(){
   const b=$("btnCall"); if(!b) return;
@@ -788,8 +796,32 @@ document.addEventListener("focusin",e=>{
 });
 document.addEventListener("focusout",()=>{ setTimeout(()=>{ try{ window.scrollTo(0,0); }catch(e){} },100); });
 
+/* ---------- 入力が届かない区間の検知 ---------- */
+let lastScanAt=0, awayAt=0;
+function paintLastRead(){
+  const el=$("lastRead"); if(!el) return;
+  if(!inScan()||!lastScanAt){ el.textContent=""; return; }
+  const sec=Math.round((Date.now()-lastScanAt)/1000);
+  if(sec<90){ el.textContent="最終 "+hhmm(lastScanAt); el.style.color="#4A5B6B"; }
+  else { el.textContent="最終 "+hhmm(lastScanAt)+"（"+Math.floor(sec/60)+"分前）"; el.style.color="#A8231C"; }
+}
+setInterval(paintLastRead,10000);
+window.addEventListener("blur",()=>{ if(inScan()) awayAt=Date.now(); });
+window.addEventListener("focus",()=>{
+  if(!awayAt||!inScan()){ awayAt=0; return; }
+  const sec=Math.round((Date.now()-awayAt)/1000); awayAt=0;
+  if(sec<3) return;
+  const c=cnt(cur());
+  beep(300,180,.08); buzz([100,80,100]);
+  notify("この間の読み取りは記録されていません",
+    "アプリの外に画面が移っていた時間　約"+sec+"秒\n"+
+    "バッテリー警告や着信のバナーが出ると、リーダーの読み取りがアプリに届きません。\n\n"+
+    "この便の件数：3cm "+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"\n"+
+    "数が合わない場合は、その間に通した分を読み直してください。");
+});
+
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-03.52";
+const APP_VER="2026-09-03.54";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -869,6 +901,7 @@ function commit(no){
   const sh=cur();
   sh.scans.push({no:no,size:size,ts:Date.now()});
   if(size===3) sh.c3=(sh.c3||0)+1; else sh.c5=(sh.c5||0)+1;
+  lastScanAt=Date.now(); paintLastRead();
   saveSoon(); markDirty(sh);
   setBand("ok",size+"cm で登録",fmt(no),"この便 "+sh.scans.length+"件");
   beep(size===5?1180:900,size===5?110:60,.06);
@@ -1015,7 +1048,7 @@ function render(){
   $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
   $("hBin").textContent=sh.bin;
   $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt);
-  paintCall(); paintSync();
+  paintCall(); paintSync(); paintLastRead();
   $("m3").className="mode"+(mode3?" on3":"");
   $("m5").className="mode"+(mode3?"":" on5");
   $("m3hint").textContent=mode3?"固定中":"切替";
