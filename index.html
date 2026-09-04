@@ -181,6 +181,16 @@ details.fold>summary::-webkit-details-marker{display:none}
 details.fold>summary .cnt{font-weight:800;color:var(--ink)}
 details.fold[open]>summary{border-radius:8px 8px 0 0;background:#F2F5F8}
 details.fold .inner{border:1px solid var(--line);border-top:none;border-radius:0 0 8px 8px;padding:8px}
+@keyframes oddflash{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.25;transform:scale(1.04)}}
+@keyframes oddbg{0%,100%{background:#F7D6D2;border-color:#A8231C}50%{background:#FFF;border-color:#F7D6D2}}
+#shOdd{top:50%;bottom:auto;transform:translateY(-50%);left:14px;right:14px;border-radius:12px;
+  max-height:82dvh;box-shadow:0 8px 28px rgba(168,35,28,.35);border:3px solid #A8231C;padding:16px 16px 18px}
+#shOdd h2{color:#A8231C}
+.oddbox{border:2px solid #A8231C;border-radius:10px;padding:14px;margin-bottom:10px;text-align:center;
+  animation:oddbg 1s ease-in-out infinite}
+.oddno{font-size:30px;font-weight:800;color:#A8231C;letter-spacing:.05em;
+  animation:oddflash .7s ease-in-out infinite}
+.oddhead{font-size:13px;font-weight:800;color:#A8231C;margin-bottom:6px}
 .sep{height:0;border-top:2px solid #B9C7D6;margin:12px 0 10px}
 .sheet h2{font-size:17px;margin:0 0 10px}
 .sheet h3{font-size:13px;color:var(--ink-2);margin:16px 0 6px}
@@ -346,6 +356,21 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <button class="btn wide dim hide" id="dupAckAll">まとめて確認する</button>
 </div>
 
+<!-- 番号帯ちがい（最重要アラート） -->
+<div class="sheet" id="shOdd">
+  <h2 id="oddTitle">番号がちがいます</h2>
+  <div class="oddbox">
+    <div class="oddhead">この便のほとんどは <span id="oddBase"></span> で始まっています</div>
+    <div class="oddno num" id="oddNo"></div>
+    <div style="font-size:13px;color:#4A5B6B;margin-top:6px">読取 <b class="num" id="oddTime"></b></div>
+  </div>
+  <p class="note">ネコポスなど、対象外の荷物が混じっている可能性があります。荷物を確認してください。</p>
+  <div id="oddRest"></div>
+  <button class="btn wide danger" id="oddDrop">対象外だった（カウントしない）</button>
+  <button class="btn wide" id="oddKeep">ゆうパケットだった（このままカウント）</button>
+  <button class="btn wide dim hide" id="oddKeepAll">残りもすべてカウントする</button>
+</div>
+
 <!-- 手入力 -->
 <div class="sheet" id="shManual">
   <h2>番号を手入力</h2>
@@ -466,6 +491,10 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <div class="inner"><div id="dupLog"></div>
     <p class="note">二度読みはカウントしていません。同じ荷物を2回通したか、荷物自体が重複している可能性があります。</p></div></details>
 
+  <details class="fold"><summary>番号帯ちがいの記録（この端末）<span class="cnt" id="oddCnt"></span></summary>
+    <div class="inner"><div id="oddLog"></div>
+    <p class="note">その日の多数派と先頭4桁が異なった番号です。ネコポスなど対象外の荷物が混じっていないか確認してください。</p></div></details>
+
   <details class="fold"><summary>削除の記録（この端末）<span class="cnt" id="delCnt"></span></summary>
     <div class="inner"><div id="delLog"></div>
     <p class="note">削除した読取はCSVには含みません。</p></div></details>
@@ -517,13 +546,13 @@ let S=load();
 let mode3=true, sheetOpen=false, locked=false;
 let selMode=false, sel=new Set();
 
-function blank(){ return {date:today(),shifts:[],active:-1,dupLog:[],delLog:[],ends:[]}; }
+function blank(){ return {date:today(),shifts:[],active:-1,dupLog:[],delLog:[],ends:[],oddLog:[]}; }
 function load(){
   try{
     const raw=localStorage.getItem(KEY); if(!raw) return blank();
     const s=JSON.parse(raw);
     if(s.date!==today()){ archive(s); return blank(); }
-    s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; s.ends=s.ends||[]; return s;
+    s.dupLog=s.dupLog||[]; s.delLog=s.delLog||[]; s.ends=s.ends||[]; s.oddLog=s.oddLog||[]; return s;
   }catch(e){ return blank(); }
 }
 function mergeDay(t,x){
@@ -857,7 +886,7 @@ window.addEventListener("focus",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-03.54";
+const APP_VER="2026-09-04.55";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -911,6 +940,76 @@ $("askAlt2").onclick=()=>{ const cb=askOnAlt2; askClose(); if(cb) cb(); };
 $("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("askOk").click(); } });
 const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCancel:true});
 
+/* ---------- 番号帯ちがいの検知 ---------- */
+// その日の読取から「先頭4桁の多数派」を求め、そこから外れた番号を警告する
+const ODD_MIN=30, ODD_RATIO=.8, ODD_LEN=4;
+function headOf(no){ return String(no).slice(0,ODD_LEN); }
+function majorHead(){
+  const m=new Map(); let total=0;
+  S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>{
+    const h=headOf(x.no); m.set(h,(m.get(h)||0)+1); total++;
+  }));
+  if(total<ODD_MIN) return null;
+  let best=null,cnt2=0;
+  m.forEach((v,k)=>{ if(v>cnt2){ cnt2=v; best=k; } });
+  return (cnt2/total>=ODD_RATIO)?{head:best,n:cnt2,total:total}:null;
+}
+let oddQ=[], oddOpen=false;
+function paintOddRest(){
+  const n=oddQ.length;
+  $("oddTitle").textContent=n?("番号がちがいます（残り "+(n+1)+"件）"):"番号がちがいます";
+  $("oddRest").innerHTML=n?'<div class="note" style="margin:8px 2px 0">このあと確認する分</div>'+
+    oddQ.slice(0,6).map(d=>'<div class="row" style="background:#F7D6D2;border-color:#A8231C;padding:5px 9px">'+
+      '<span class="no num" style="font-size:14px;color:#A8231C">'+fmt(d.no)+'</span>'+
+      '<span class="tm num">'+hms(d.ts)+"</span></div>").join("")+
+    (n>6?'<p class="note">ほか '+(n-6)+"件</p>":""):"";
+  $("oddKeepAll").className="btn wide dim"+(n?"":" hide");
+  $("oddKeepAll").textContent="残りもすべてカウントする（"+(n+1)+"件）";
+}
+function nextOdd(){
+  const d=oddQ.shift();
+  if(!d){ oddOpen=false; closeSheets(); return; }
+  if(locked) setLock(false);
+  oddOpen=true; oddCur=d;
+  $("oddNo").textContent=fmt(d.no);
+  $("oddTime").textContent=hms(d.ts);
+  $("oddBase").textContent=d.base;
+  paintOddRest(); openSheet("shOdd");
+}
+let oddCur=null;
+function alarmOdd(){
+  beep(1400,140,.11); setTimeout(()=>beep(980,140,.11),170); setTimeout(()=>beep(1400,140,.11),340);
+  setTimeout(()=>beep(980,240,.11),510);
+  buzz([300,120,300,120,300,120,300]);
+}
+function showOdd(no,size,base){
+  const now=Date.now();
+  S.oddLog=S.oddLog||[];
+  S.oddLog.push({no:no,size:size,ts:now,base:base,bin:cur().bin,kept:true});
+  saveSoon();
+  oddQ.push({no:no,size:size,ts:now,base:base});
+  setBand("dup","番号がちがいます",fmt(no),"多数派は "+base+"　荷物を確認してください");
+  alarmOdd();
+  if(!oddOpen) nextOdd(); else paintOddRest();
+  renderSoon();
+}
+function markOdd(no,kept){
+  const e=(S.oddLog||[]).slice().reverse().find(x=>x.no===no);
+  if(e) e.kept=!!kept;
+}
+$("oddKeep").onclick=()=>{ if(oddCur) markOdd(oddCur.no,true); saveSoon(); if(oddQ.length) nextOdd(); else { oddOpen=false; closeSheets(); } };
+$("oddKeepAll").onclick=()=>{ oddQ=[]; oddOpen=false; saveSoon(); closeSheets(); };
+$("oddDrop").onclick=()=>{
+  if(oddCur){
+    const sh=cur();
+    const x=sh&&sh.scans.find(v=>v.no===oddCur.no);
+    if(x){ removeScans([x],"対象外（番号帯ちがい）"); }
+    markOdd(oddCur.no,false);
+  }
+  saveSoon();
+  if(oddQ.length) nextOdd(); else { oddOpen=false; closeSheets(); }
+};
+
 /* ---------- 読取 ---------- */
 let seenIdx=null;
 function buildSeen(){ seenIdx=new Map(); S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>seenIdx.set(x.no,true))); }
@@ -939,6 +1038,8 @@ function commit(no){
   if(size===3) sh.c3=(sh.c3||0)+1; else sh.c5=(sh.c5||0)+1;
   lastScanAt=Date.now(); paintLastRead();
   saveSoon(); markDirty(sh);
+  const mj=majorHead();
+  if(mj&&headOf(no)!==mj.head){ showOdd(no,size,mj.head); return; }
   setBand("ok",size+"cm で登録",fmt(no),"この便 "+sh.scans.length+"件");
   beep(size===5?1180:900,size===5?110:60,.06);
   buzz(size===5?[40,40,40]:25);
@@ -1270,7 +1371,7 @@ document.addEventListener("keydown",e=>{
       if(el.id==="hisSearch") render();
     }
     if(askOpen||!inScan()) return;
-    if(sheetOpen&&!dupOpen) return;      // 二度読みの確認中は読み取りを続けられる
+    if(sheetOpen&&!dupOpen&&!oddOpen) return;   // 二度読み・番号ちがいの確認中も読み取りを続けられる
     handle(code);
     if(locked) paintLock();
     return;
@@ -1497,6 +1598,12 @@ function paintSummary(){
       "　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+(sh._remote?"　別端末":"")+"</span></span></div>";
   }).join(""):'<p class="note">なし</p>';
 
+  $("oddCnt").textContent=(S.oddLog||[]).length?S.oddLog.length+"件":"なし";
+  $("oddLog").innerHTML=(S.oddLog||[]).length?S.oddLog.slice().reverse().map(d=>
+    '<div class="row" style="background:#F7D6D2;border-color:#A8231C"><span style="flex:1">'+
+    '<b class="num" style="color:#A8231C">'+fmt(d.no)+"</b>"+(d.kept?"":' <span class="tag tag3" style="color:#A8231C;border-color:#A8231C;background:#FFF">対象外</span>')+
+    '<br><span style="font-size:12px;color:#4A5B6B">'+hms(d.ts)+"　多数派 "+d.base+"　"+d.bin+"</span></span></div>").join("")
+    :'<p class="note">なし</p>';
   $("endCnt").textContent=S.ends.length?S.ends.length+"件":"なし";
   $("dupCnt").textContent=S.dupLog.length?S.dupLog.length+"件":"なし";
   $("delCnt").textContent=S.delLog.length?S.delLog.length+"件":"なし";
