@@ -191,6 +191,12 @@ details.fold .inner{border:1px solid var(--line);border-top:none;border-radius:0
 .oddno{font-size:30px;font-weight:800;color:#A8231C;letter-spacing:.05em;
   animation:oddflash .7s ease-in-out infinite}
 .oddhead{font-size:13px;font-weight:800;color:#A8231C;margin-bottom:6px}
+mark.hit{background:#FFE58A;color:inherit;border-radius:3px;padding:0 1px;font-weight:800}
+.srow{display:flex;gap:6px;align-items:center;margin:8px 0 0}
+.srow button{border:1px solid var(--line);background:var(--card);color:var(--ink-2);font-weight:700;font-size:13px;
+  border-radius:8px;padding:8px 10px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.srow button.on{border-color:var(--blue);background:var(--blue-bg);color:var(--blue)}
+.srow .cnt{font-size:13px;font-weight:700;color:var(--ink-2);margin-left:auto}
 .sep{height:0;border-top:2px solid #B9C7D6;margin:12px 0 10px}
 .sheet h2{font-size:17px;margin:0 0 10px}
 .sheet h3{font-size:13px;color:var(--ink-2);margin:16px 0 6px}
@@ -307,6 +313,11 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <span class="selinfo" id="selInfo"></span>
     </div>
     <input class="search" id="hisSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
+    <div class="srow hide" id="hisSrow">
+      <button id="hisHit" class="on">一致するもの</button>
+      <button id="hisMiss">一致しないもの</button>
+      <span class="cnt" id="hisCnt2"></span>
+    </div>
     <div class="sep"></div>
     <div id="list"></div>
     <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
@@ -433,6 +444,11 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div id="detMeta"></div>
   <h3>読取</h3>
   <input class="search" id="detSearch" type="tel" inputmode="numeric" placeholder="番号で検索（一部でも可）" autocomplete="off">
+  <div class="srow hide" id="detSrow">
+    <button id="detHit" class="on">一致するもの</button>
+    <button id="detMiss">一致しないもの</button>
+    <span class="cnt" id="detCnt2"></span>
+  </div>
   <div class="sep"></div>
   <div id="detScans"></div>
   <h3>回収資料の写真</h3>
@@ -886,7 +902,7 @@ window.addEventListener("focus",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-04.58";
+const APP_VER="2026-09-04.59";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -909,6 +925,16 @@ document.querySelectorAll("[data-jump]").forEach(b=>b.onclick=()=>{
   box.scrollTo({top:b.getAttribute("data-jump")==="top"?0:box.scrollHeight,behavior:"smooth"});
 });
 const digitsOf=v=>String(v||"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[^0-9]/g,"");
+// 表示用の番号に、検索語の一致部分をマーカーで示す
+function fmtHit(no,q){
+  const t=fmt(no);
+  if(!q) return t;
+  const i=no.indexOf(q); if(i<0) return t;
+  // ハイフン入り表示での位置に変換（4桁ごとに1つ増える）
+  const pos=k=>k+Math.floor(k/4)-(k%4===0&&k>0?0:0);
+  const a=i+Math.floor(i/4), b=(i+q.length-1)+Math.floor((i+q.length-1)/4);
+  return t.slice(0,a)+"<mark class='hit'>"+t.slice(a,b+1)+"</mark>"+t.slice(b+1);
+}
 
 /* ---------- 確認ダイアログ ---------- */
 let askOpen=false, askOnOk=null, askOnAlt=null, askOnAlt2=null;
@@ -1257,14 +1283,19 @@ function render(){
 
   const l=$("list");
   const q=digitsOf($("hisSearch").value);
-  const src=q?sh.scans.filter(x=>x.no.includes(q)):sh.scans.slice(-60);
+  $("hisSrow").className="srow"+(q?"":" hide");
+  $("hisHit").className=hisMiss?"":"on"; $("hisMiss").className=hisMiss?"on":"";
+  const hitL=q?sh.scans.filter(x=>x.no.includes(q)):[];
+  const missL=q?sh.scans.filter(x=>!x.no.includes(q)):[];
+  if(q) $("hisCnt2").textContent="一致 "+hitL.length+"件 / 一致しない "+missL.length+"件　全 "+sh.scans.length+"件";
+  const src=q?(hisMiss?missL:hitL):sh.scans.slice(-60);
   if(!sh.scans.length){ l.innerHTML='<div class="empty">まだ読み取りがありません</div>'; }
-  else if(q&&!src.length){ l.innerHTML='<div class="empty">「'+q+'」を含む番号はありません</div>'; }
+  else if(q&&!src.length){ l.innerHTML='<div class="empty">'+(hisMiss?"すべて一致しています":"「"+q+"」を含む番号はありません")+"</div>"; }
   else{
     l.innerHTML=src.slice().reverse().map(x=>
       '<div class="row'+(selMode&&sel.has(x.no)?" pick":"")+'" data-no="'+x.no+'">'+
       (selMode?'<span class="ck">'+(sel.has(x.no)?"✓":"")+'</span>':'')+
-      '<span class="no num">'+fmt(x.no)+'</span>'+
+      '<span class="no num">'+((q&&!hisMiss)?fmtHit(x.no,q):fmt(x.no))+'</span>'+
       '<span class="tag tag'+x.size+'">'+x.size+'cm</span>'+
       '<span class="tm num">'+hhmm(x.ts)+'</span>'+
       (selMode?'':'<button class="x" data-del="'+x.no+'">削除</button>')+
@@ -1456,6 +1487,9 @@ function setMode(v){
 $("m3").onclick=()=>setMode(true);
 $("m5").onclick=()=>setMode(false);
 
+let hisMiss=false;
+$("hisHit").onclick=()=>{ hisMiss=false; render(); };
+$("hisMiss").onclick=()=>{ hisMiss=true; render(); };
 $("hisSearch").addEventListener("input",()=>render());
 $("hisSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("hisSearch").blur(); } });
 $("btnManual").onclick=()=>{ $("inNo").value=""; openSheet("shManual"); setTimeout(()=>$("inNo").focus(),80); };
@@ -1943,18 +1977,26 @@ function detAllScans(){
   if(detCur.all) return detCur.day.shifts.flatMap(sh=>(Array.isArray(sh.scans)?sh.scans:[]).map(x=>Object.assign({},x,{_bin:sh.bin,_drv:sh.driver||""})));
   return Array.isArray(detCur.sh.scans)?detCur.sh.scans:[];
 }
+let detMiss=false;
 function paintDetScans(){
   if(!detCur) return;
   const all=detAllScans(), q=digitsOf($("detSearch").value);
-  const src=(q?all.filter(x=>x.no.includes(q)):all).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
-  const rowHtml=x=>'<div class="row"><span class="no num">'+fmt(x.no)+
+  $("detSrow").className="srow"+(q?"":" hide");
+  $("detHit").className=detMiss?"":"on"; $("detMiss").className=detMiss?"on":"";
+  const hit=q?all.filter(x=>x.no.includes(q)):all;
+  const miss=q?all.filter(x=>!x.no.includes(q)):[];
+  if(q) $("detCnt2").textContent="一致 "+hit.length+"件 / 一致しない "+miss.length+"件　全 "+all.length+"件";
+  const src=((q&&detMiss)?miss:hit).slice().sort((a,b)=>(b.ts||0)-(a.ts||0));
+  const rowHtml=x=>'<div class="row"><span class="no num">'+((q&&!detMiss)?fmtHit(x.no,q):fmt(x.no))+
     (detCur.all?'<div style="font-size:11px;color:#4A5B6B;font-weight:500">'+x._bin+"　"+x._drv+"</div>":"")+'</span>'+
     '<span class="tag tag'+x.size+'">'+x.size+'cm</span><span class="tm num">'+hhmm(x.ts)+"</span></div>";
   $("detScans").innerHTML=all.length
-    ?(src.length?src.map(rowHtml).join("")+'<p class="note">'+src.length+"件"+(q?" 該当 / 全 "+all.length+"件":"")+"</p>"
-      :'<p class="note">該当する番号はありません</p>')
+    ?(src.length?src.map(rowHtml).join("")+'<p class="note">'+src.length+"件表示"+(q?"（全 "+all.length+"件）":"")+"</p>"
+      :'<p class="note">'+(q&&detMiss?"すべて一致しています":"該当する番号はありません")+"</p>")
     :'<p class="note">なし</p>';
 }
+$("detHit").onclick=()=>{ detMiss=false; paintDetScans(); };
+$("detMiss").onclick=()=>{ detMiss=true; paintDetScans(); };
 $("detSearch").addEventListener("input",paintDetScans);
 $("detSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("detSearch").blur(); } });
 function shrinkImage(file,longEdge,quality){
