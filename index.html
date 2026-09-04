@@ -360,14 +360,14 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <div class="sheet" id="shOdd">
   <h2 id="oddTitle">番号がちがいます</h2>
   <div class="oddbox">
-    <div class="oddhead">この便のほとんどは <span id="oddBase"></span> で始まっています</div>
+    <div class="oddhead">本日の正規の番号帯は <span id="oddBase"></span> です</div>
     <div class="oddno num" id="oddNo"></div>
-    <div style="font-size:13px;color:#4A5B6B;margin-top:6px">読取 <b class="num" id="oddTime"></b></div>
+    <div style="font-size:13px;color:#4A5B6B;margin-top:6px">読取 <b class="num" id="oddTime"></b>　<span id="oddPos"></span></div>
   </div>
   <p class="note">ネコポスなど、対象外の荷物が混じっている可能性があります。荷物を確認してください。</p>
   <div id="oddRest"></div>
   <button class="btn wide danger" id="oddDrop">対象外だった（カウントしない）</button>
-  <button class="btn wide" id="oddKeep">ゆうパケットだった（このままカウント）</button>
+  <button class="btn wide" id="oddKeep">ゆうパケットだった（この番号帯は以後通す）</button>
   <button class="btn wide dim hide" id="oddKeepAll">残りもすべてカウントする</button>
 </div>
 
@@ -492,7 +492,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <p class="note">二度読みはカウントしていません。同じ荷物を2回通したか、荷物自体が重複している可能性があります。</p></div></details>
 
   <details class="fold"><summary>番号帯ちがいの記録（この端末）<span class="cnt" id="oddCnt"></span></summary>
-    <div class="inner"><div id="oddLog"></div>
+    <div class="inner"><p class="note" id="oddHeads" style="margin-top:0"></p><div id="oddLog"></div>
     <p class="note">その日の多数派と先頭4桁が異なった番号です。ネコポスなど対象外の荷物が混じっていないか確認してください。</p></div></details>
 
   <details class="fold"><summary>削除の記録（この端末）<span class="cnt" id="delCnt"></span></summary>
@@ -886,7 +886,7 @@ window.addEventListener("focus",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-04.55";
+const APP_VER="2026-09-04.58";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -954,7 +954,29 @@ function majorHead(){
   m.forEach((v,k)=>{ if(v>cnt2){ cnt2=v; best=k; } });
   return (cnt2/total>=ODD_RATIO)?{head:best,n:cnt2,total:total}:null;
 }
-let oddQ=[], oddOpen=false;
+let oddQ=[], oddOpen=false, oddBackDone=false, oddSeen=new Set();
+// 当日に「ゆうパケットだった」と承認した先頭4桁。多数派とあわせて正規の番号帯とする。
+function okHeads(){ S.okHeads=S.okHeads||[]; return S.okHeads; }
+function isOkHead(h){
+  if(okHeads().indexOf(h)>=0) return true;
+  const mj=majorHead();
+  return !!(mj&&mj.head===h);
+}
+function addOkHead(h){ if(h&&okHeads().indexOf(h)<0){ okHeads().push(h); saveSoon(); } }
+// 基準ができた時点で、それ以前に読んだ分もさかのぼって点検する
+function backCheckOdd(base){
+  if(oddBackDone) return; oddBackDone=true;
+  const hits=[];
+  S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>{
+    if(!isOkHead(headOf(x.no))&&!oddSeen.has(x.no)) hits.push({no:x.no,size:x.size,ts:x.ts,base:base,back:true,bin:sh.bin});
+  }));
+  if(!hits.length) return;
+  hits.sort((a,b)=>a.ts-b.ts);
+  S.oddLog=S.oddLog||[];
+  hits.forEach(h=>{ oddSeen.add(h.no); S.oddLog.push({no:h.no,size:h.size,ts:h.ts,base:base,bin:h.bin,kept:true,back:true}); });
+  saveSoon();
+  oddQ=hits.concat(oddQ);
+}
 function paintOddRest(){
   const n=oddQ.length;
   $("oddTitle").textContent=n?("番号がちがいます（残り "+(n+1)+"件）"):"番号がちがいます";
@@ -966,6 +988,19 @@ function paintOddRest(){
   $("oddKeepAll").className="btn wide dim"+(n?"":" hide");
   $("oddKeepAll").textContent="残りもすべてカウントする（"+(n+1)+"件）";
 }
+function baseLabel(){
+  const mj=majorHead(); const list=[];
+  if(mj) list.push(mj.head);
+  okHeads().forEach(h=>{ if(list.indexOf(h)<0) list.push(h); });
+  return list.join("・")||"—";
+}
+function scanPos(no){
+  for(const sh of S.shifts){
+    const i=(sh.scans||[]).findIndex(x=>x.no===no);
+    if(i>=0) return {bin:sh.bin,idx:i+1,total:sh.scans.length,startedAt:sh.startedAt};
+  }
+  return null;
+}
 function nextOdd(){
   const d=oddQ.shift();
   if(!d){ oddOpen=false; closeSheets(); return; }
@@ -974,6 +1009,11 @@ function nextOdd(){
   $("oddNo").textContent=fmt(d.no);
   $("oddTime").textContent=hms(d.ts);
   $("oddBase").textContent=d.base;
+  const p=scanPos(d.no);
+  $("oddPos").textContent=p
+    ? p.bin+" の "+p.idx+"件目 / "+p.total+"件　開始 "+hhmm(p.startedAt)+"（開始から"+Math.max(0,Math.round((d.ts-p.startedAt)/60000))+"分）"
+    : "";
+  $("oddTitle").textContent=(d.back?"さかのぼって見つかりました":"番号がちがいます")+(oddQ.length?"（残り "+(oddQ.length+1)+"件）":"");
   paintOddRest(); openSheet("shOdd");
 }
 let oddCur=null;
@@ -987,6 +1027,7 @@ function showOdd(no,size,base){
   S.oddLog=S.oddLog||[];
   S.oddLog.push({no:no,size:size,ts:now,base:base,bin:cur().bin,kept:true});
   saveSoon();
+  oddSeen.add(no);
   oddQ.push({no:no,size:size,ts:now,base:base});
   setBand("dup","番号がちがいます",fmt(no),"多数派は "+base+"　荷物を確認してください");
   alarmOdd();
@@ -997,8 +1038,19 @@ function markOdd(no,kept){
   const e=(S.oddLog||[]).slice().reverse().find(x=>x.no===no);
   if(e) e.kept=!!kept;
 }
-$("oddKeep").onclick=()=>{ if(oddCur) markOdd(oddCur.no,true); saveSoon(); if(oddQ.length) nextOdd(); else { oddOpen=false; closeSheets(); } };
-$("oddKeepAll").onclick=()=>{ oddQ=[]; oddOpen=false; saveSoon(); closeSheets(); };
+$("oddKeep").onclick=()=>{
+  if(oddCur){ markOdd(oddCur.no,true); addOkHead(headOf(oddCur.no)); }
+  // 同じ番号帯が待ち行列にあれば、まとめて通す
+  if(oddCur){ const h=headOf(oddCur.no);
+    oddQ=oddQ.filter(d=>{ if(headOf(d.no)===h){ markOdd(d.no,true); return false; } return true; }); }
+  saveSoon();
+  if(oddQ.length) nextOdd(); else { oddOpen=false; closeSheets(); renderSoon(); }
+};
+$("oddKeepAll").onclick=()=>{
+  if(oddCur) addOkHead(headOf(oddCur.no));
+  oddQ.forEach(d=>{ markOdd(d.no,true); addOkHead(headOf(d.no)); });
+  oddQ=[]; oddOpen=false; saveSoon(); closeSheets(); renderSoon();
+};
 $("oddDrop").onclick=()=>{
   if(oddCur){
     const sh=cur();
@@ -1039,7 +1091,12 @@ function commit(no){
   lastScanAt=Date.now(); paintLastRead();
   saveSoon(); markDirty(sh);
   const mj=majorHead();
-  if(mj&&headOf(no)!==mj.head){ showOdd(no,size,mj.head); return; }
+  if(mj) addOkHead(mj.head);      // 最初に立った多数派は、以後8割を割っても正規のまま
+  if(mj||okHeads().length){
+    if(mj) backCheckOdd(mj.head);
+    if(oddQ.length&&!oddOpen){ alarmOdd(); nextOdd(); renderSoon(); return; }
+    if(!isOkHead(headOf(no))){ oddSeen.add(no); showOdd(no,size,baseLabel()); return; }
+  }
   setBand("ok",size+"cm で登録",fmt(no),"この便 "+sh.scans.length+"件");
   beep(size===5?1180:900,size===5?110:60,.06);
   buzz(size===5?[40,40,40]:25);
@@ -1184,7 +1241,7 @@ function render(){
   const cc=cnt(sh), c3=cc.a, c5=cc.b;
   $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
   $("hBin").textContent=sh.bin;
-  $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt);
+  $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt)+" / "+sh.scans.length+"件";
   paintCall(); paintSync(); paintLastRead();
   $("m3").className="mode"+(mode3?" on3":"");
   $("m5").className="mode"+(mode3?"":" on5");
@@ -1599,9 +1656,11 @@ function paintSummary(){
   }).join(""):'<p class="note">なし</p>';
 
   $("oddCnt").textContent=(S.oddLog||[]).length?S.oddLog.length+"件":"なし";
+  $("oddHeads").textContent="本日の正規の番号帯："+baseLabel();
   $("oddLog").innerHTML=(S.oddLog||[]).length?S.oddLog.slice().reverse().map(d=>
     '<div class="row" style="background:#F7D6D2;border-color:#A8231C"><span style="flex:1">'+
     '<b class="num" style="color:#A8231C">'+fmt(d.no)+"</b>"+(d.kept?"":' <span class="tag tag3" style="color:#A8231C;border-color:#A8231C;background:#FFF">対象外</span>')+
+    (d.back?' <span class="tag tag5">さかのぼり</span>':"")+
     '<br><span style="font-size:12px;color:#4A5B6B">'+hms(d.ts)+"　多数派 "+d.base+"　"+d.bin+"</span></span></div>").join("")
     :'<p class="note">なし</p>';
   $("endCnt").textContent=S.ends.length?S.ends.length+"件":"なし";
