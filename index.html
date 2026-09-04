@@ -477,6 +477,34 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
 </div>
 
+<script type="module">
+// ── Firebase 匿名認証：正規のアプリからのアクセスであることを名乗る ──
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInAnonymously, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+const FB_CONFIG={
+  apiKey:"AIzaSyDDsNZnlG3swyRtuCbMjkUkZpH4X68gUiI",
+  authDomain:"osq-report-3db91.firebaseapp.com",
+  databaseURL:"https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"osq-report-3db91",
+  storageBucket:"osq-report-3db91.firebasestorage.app",
+  messagingSenderId:"86627546503",
+  appId:"1:86627546503:web:62d338fb75ebaa91bbcf22"
+};
+window._fbToken=null;
+window._fbReady=new Promise(res=>{ window._fbReadyDone=res; });
+try{
+  const app=initializeApp(FB_CONFIG,"jet-scan");
+  const auth=getAuth(app);
+  onIdTokenChanged(auth,async u=>{
+    if(u){ try{ window._fbToken=await u.getIdToken(); }catch(e){} }
+    window._fbReadyDone(true);
+  });
+  signInAnonymously(auth).catch(()=>window._fbReadyDone(false));
+  setInterval(async()=>{ try{ const u=auth.currentUser; if(u) window._fbToken=await u.getIdToken(); }catch(e){} },30*60*1000);
+  setTimeout(()=>window._fbReadyDone(false),6000);   // 認証が返らなくても止めない
+}catch(e){ window._fbReadyDone(false); }
+</script>
+
 <script>
 "use strict";
 const KEY="jet-scan-v2", AKEY="jet-scan-archive-v2";
@@ -611,7 +639,7 @@ const SETKEY="jet-settings-v1";
 let SET=(()=>{ try{ return JSON.parse(localStorage.getItem(SETKEY)||"{}"); }catch(e){ return {}; } })();
 async function loadSettings(){
   try{
-    const r=await fetch(FB_URL+"/nikki/jet_settings.json"); const v=await r.json();
+    const r=await fbFetch(FB_URL+"/nikki/jet_settings.json"); const v=await r.json();
     if(v&&typeof v==="object"){ SET=Object.assign({},SET,v); localStorage.setItem(SETKEY,JSON.stringify(SET)); }
   }catch(e){}
   paintCall();
@@ -620,11 +648,11 @@ async function saveSettings(patch){
   Object.assign(SET,patch); localStorage.setItem(SETKEY,JSON.stringify(SET));
   try{
     for(const k of Object.keys(patch)){          // 項目ごとに書く（他の設定を消さない）
-      const r=await fetch(FB_URL+"/nikki/jet_settings/"+k+".json",
+      const r=await fbFetch(FB_URL+"/nikki/jet_settings/"+k+".json",
         {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(patch[k])});
       if(!r.ok) return false;
     }
-    const v=await (await fetch(FB_URL+"/nikki/jet_settings.json?_="+Date.now())).json();  // 保存できたか確認
+    const v=await (await fbFetch(FB_URL+"/nikki/jet_settings.json?_="+Date.now())).json();  // 保存できたか確認
     return !!(v&&Object.keys(patch).every(k=>String(v[k]||"")===String(patch[k]||"")));
   }catch(e){ return false; }
 }
@@ -647,6 +675,14 @@ setInterval(loadSettings,10*60*1000);
 
 /* ---------- ID照合（日報アプリの登録データ） ---------- */
 const FB_URL="https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app";
+// Firebase への通信は認証トークンを付ける（未取得でも待たずに通す）
+let fbAuthWaited=false;
+async function fbFetch(url,opts){
+  if(!fbAuthWaited){ fbAuthWaited=true; try{ await window._fbReady; }catch(e){} }
+  const t=window._fbToken;
+  if(t) url+=(url.indexOf("?")<0?"?":"&")+"auth="+encodeURIComponent(t);
+  return fetch(url,opts);
+}
 const MKEY="jet-master-v1";
 let MASTER=null;   // {drivers:[], companies:[], at}
 function asArr(v){ return Array.isArray(v)?v.filter(Boolean):(v?Object.values(v).filter(Boolean):[]); }
@@ -654,8 +690,8 @@ async function loadMaster(force){
   if(!force){ try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c&&Date.now()-c.at<30*60*1000){ MASTER=c; return c; } }catch(e){} }
   try{
     const [d,c]=await Promise.all([
-      fetch(FB_URL+"/nikki/drivers.json").then(r=>r.json()),
-      fetch(FB_URL+"/nikki/companies.json").then(r=>r.json())
+      fbFetch(FB_URL+"/nikki/drivers.json").then(r=>r.json()),
+      fbFetch(FB_URL+"/nikki/companies.json").then(r=>r.json())
     ]);
     MASTER={drivers:asArr(d).map(x=>({id:String(x.id||""),empNo:String(x.empNo||""),driverNo:String(x.driverNo||""),
       name:x.name||"",tel:x.tel||"",company:x.company||""})),
@@ -756,14 +792,14 @@ async function syncNow(){
   for(const sh of list){
     const stamp=sh._dirty;
     try{
-      const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+"/"+shiftKey(sh)+".json",
+      const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+S.date+"/"+shiftKey(sh)+".json",
         {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(shiftPayload(S,sh))});
       if(!r.ok) continue;
       sh._synced=stamp;
       // 番号一覧は 20件たまるごと / 減ったとき / 締めたとき だけ送る（通信量対策）
       const nlen=sh.scans.length, plen=sh._nosLen||0;
       if(nlen-plen>=100||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
-        const nr=await fetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+"/"+shiftKey(sh)+".json",
+        const nr=await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+"/"+shiftKey(sh)+".json",
           {method:"PUT",headers:{"Content-Type":"application/json"},
            body:JSON.stringify(sh.scans.map(x=>({n:x.no,s:x.size,t:x.ts})))});
         if(nr.ok){ sh._nosLen=nlen; if(sh.closed) sh._nosDone=true; }
@@ -1290,8 +1326,8 @@ async function crossCheck(sh){
   const out=[];
   try{
     const [sr,nr]=await Promise.all([
-      fetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"),
-      fetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+".json")
+      fbFetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"),
+      fbFetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+".json")
     ]);
     const sum=(await sr.json())||{}, nos=(await nr.json())||{};
     const idx=new Map();                       // 番号 -> 先に読んだ人
@@ -1386,8 +1422,8 @@ function isGone(k){
 }
 async function fbDeleteShift(day,sh){
   markGone(keyOf(sh));
-  try{ await fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
-  try{ await fetch(FB_URL+"/nikki/jet_scan_nos/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
+  try{ await fbFetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
+  try{ await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
 }
 $("btnCancelShift").onclick=()=>{
   if(!inScan()) return;
@@ -1410,7 +1446,7 @@ let dayAll=[], dayAllAt=0, dayAllRemote=false;
 async function fetchDayAll(){
   const map=new Map();
   try{
-    const r=await fetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"); const v=await r.json();
+    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"); const v=await r.json();
     if(v&&typeof v==="object"){
       Object.values(v).forEach(j=>{ if(!j||!j.key||isGone(j.key)) return;
         map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
@@ -1559,7 +1595,7 @@ let adminOK=false, isStaff=false, admArchive=[], admDate=null;
 let admRemoteDates=[], admCurDay=null;
 async function fetchRemoteDates(){
   try{
-    const r=await fetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
+    const r=await fbFetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
     const v=await r.json();
     admRemoteDates=v?Object.keys(v).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)):[];
   }catch(e){}
@@ -1567,7 +1603,7 @@ async function fetchRemoteDates(){
 async function fetchDayMerged(date){
   const map=new Map();
   try{
-    const r=await fetch(FB_URL+"/nikki/jet_scan/"+date+".json"); const v=await r.json();
+    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+date+".json"); const v=await r.json();
     if(v&&typeof v==="object") Object.values(v).forEach(j=>{
       if(!j||!j.key||isGone(j.key)) return;
       map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
@@ -1587,7 +1623,7 @@ async function ensureScans(date,shifts){
   const need=shifts.filter(sh=>!Array.isArray(sh.scans));
   if(!need.length) return true;
   try{
-    const r=await fetch(FB_URL+"/nikki/jet_scan_nos/"+date+".json");
+    const r=await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+date+".json");
     const v=(await r.json())||{};
     need.forEach(sh=>{
       const a=v[sh._key];
@@ -1626,7 +1662,7 @@ function markExported(day,shifts){
   shifts.forEach(sh=>{
     sh.exportedAt=now;
     if(sh._remote){
-      fetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+sh._key+".json",
+      fbFetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+sh._key+".json",
         {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({exportedAt:now})}).catch(()=>{});
     }else if(day.date===S.date){ sh._dirty=now; }
   });
@@ -1912,7 +1948,7 @@ function openDayDetail(day){
 async function loadDetPhotos(date,sh){
   const el=$("detPhotos"); el.innerHTML='<p class="note">読み込み中</p>';
   let v=null;
-  try{ const r=await fetch(FB_URL+"/nikki/jet_photos/"+date+"/"+(sh?keyOf(sh):"noshift")+".json"); v=await r.json(); }catch(e){}
+  try{ const r=await fbFetch(FB_URL+"/nikki/jet_photos/"+date+"/"+(sh?keyOf(sh):"noshift")+".json"); v=await r.json(); }catch(e){}
   const keys=v&&typeof v==="object"?Object.keys(v).sort():[];
   el.innerHTML=keys.length?'<div class="chips">'+keys.map(k=>
       '<span class="chip" style="padding:4px"><img data-full="'+k+'" src="'+(v[k].thumb||"")+'" style="height:80px;border-radius:4px;display:block;cursor:pointer"></span>').join("")+"</div>"+
@@ -2085,7 +2121,7 @@ $("btnSavePost").onclick=async()=>{
 async function wipeDate(date){
   if(admCurDay&&admCurDay.date===date) admCurDay.shifts.forEach(sh=>markGone(keyOf(sh)));
   for(const node of ["jet_scan","jet_scan_nos","jet_photos"]){
-    try{ await fetch(FB_URL+"/nikki/"+node+"/"+date+".json",{method:"DELETE"}); }catch(e){}
+    try{ await fbFetch(FB_URL+"/nikki/"+node+"/"+date+".json",{method:"DELETE"}); }catch(e){}
   }
   if(date===S.date){ S=blank(); seenIdx=null; save(); }
   else { admArchive=readArchive().filter(d=>d.date!==date); writeArchive(admArchive); }
