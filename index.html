@@ -300,6 +300,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <div class="acts" id="bandA"></div>
   </div>
 
+  <div style="padding:8px 12px 0"><button class="btn sm dim" id="btnCarrier" style="width:100%;text-align:left"></button></div>
+
   <div class="modes">
     <button class="mode" id="m3">3cm<span class="hint" id="m3hint">通常</span></button>
     <button class="mode" id="m5">5cm<span class="hint" id="m5hint">固定</span></button>
@@ -817,6 +819,8 @@ function shiftPayload(day,sh){
     key:shiftKey(sh), date:day.date, device:DEVICE,
     bin:sh.bin, binNo:binNo(day,sh),
     driverId:sh.driverId||"", driverName:sh.driver||"", tel:sh.tel||"",
+    carrierId:sh.carrierId||sh.driverId||"", carrierName:sh.carrierName||sh.driver||"",
+    carrierDiffers:!!(sh.carrierName&&sh.carrierName!==sh.driver),
     corp:sh.corp||"", corpName:corpName(sh.corp), registered:sh.registered!==false,
     startedAt:sh.startedAt||null, closedAt:sh.closedAt||null, closed:!!sh.closed,
     c3:c.a, c5:c.b, total:c.a+c.b,
@@ -902,7 +906,7 @@ window.addEventListener("focus",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-04.59";
+const APP_VER="2026-09-07.60";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1268,7 +1272,7 @@ function render(){
   $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
   $("hBin").textContent=sh.bin;
   $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt)+" / "+sh.scans.length+"件";
-  paintCall(); paintSync(); paintLastRead();
+  paintCall(); paintSync(); paintLastRead(); paintCarrier();
   $("m3").className="mode"+(mode3?" on3":"");
   $("m5").className="mode"+(mode3?"":" on5");
   $("m3hint").textContent=mode3?"固定中":"切替";
@@ -1484,6 +1488,33 @@ function setMode(v){
   setBand(v?"":"warn",(v?"3cm":"5cm")+"に固定しました","",v?"以後の読取は3cmで計数します":"3cmに戻すまで5cmで計数します");
   beep(v?900:1180,90,.06); render();
 }
+// 運搬ドライバー（局へ持ち込む人）。既定は計数した本人。
+function carrierOf(sh){ return sh.carrierName?{id:sh.carrierId||"",name:sh.carrierName}:{id:sh.driverId||"",name:sh.driver||""}; }
+function paintCarrier(){
+  const b=$("btnCarrier"); if(!b||!inScan()) return;
+  const sh=cur(), c=carrierOf(sh), same=!sh.carrierName||sh.carrierName===sh.driver;
+  b.innerHTML='<span style="color:#4A5B6B">局へ運ぶ人</span>　<b>'+(c.name||"未設定")+"</b>"+
+    (same?'<span style="color:#4A5B6B">（計数した本人）</span>':'<span style="color:#8A4B00;font-weight:700">（別の人）</span>')+
+    '<span style="float:right;color:var(--blue);font-weight:700">変更</span>';
+  b.className="btn sm"+(same?" dim":"");
+}
+$("btnCarrier").onclick=()=>{
+  if(!inScan()) return;
+  const sh=cur();
+  ask({title:"局へ運ぶ人を指定します",
+    body:"別の人が大阪北郵便局へ持ち込む場合、その人のIDを入力してください。\n空欄のままにすると計数した本人（"+(sh.driver||"")+"）になります。",
+    input:true,okText:"設定する",
+    onOk:async v=>{
+      const t=normId(v);
+      if(!t){ sh.carrierId=""; sh.carrierName=""; save(); markDirty(sh); paintCarrier(); notify("計数した本人に戻しました",""); return; }
+      if(!MASTER) await loadMaster(false);
+      const d=findDriver(t);
+      if(d){ sh.carrierId=canonId(t); sh.carrierName=d.name; }
+      else { sh.carrierId=canonId(t); sh.carrierName="ID "+canonId(t); }
+      save(); markDirty(sh); paintCarrier();
+      notify("局へ運ぶ人を設定しました",sh.carrierName+(d?"":"（登録がないIDです。氏名は後から管理画面で確認してください）"));
+    }});
+};
 $("m3").onclick=()=>setMode(true);
 $("m5").onclick=()=>setMode(false);
 
@@ -1558,7 +1589,9 @@ $("btnClose").onclick=async()=>{
   const earlier=res.list.filter(d=>d.mineTs<d.other.ts);
   const a=cnt(sh).a, b=cnt(sh).b;
   const dest=(SET.postName||"").trim()||"郵便局";
-  const base=(a2,b2)=>"3cm "+a2+"個　5cm "+b2+"個　計 "+(a2+b2)+"個\n締め時刻 "+hhmm(Date.now())+
+  const car=carrierOf(sh);
+  const carLine=(sh.carrierName&&sh.carrierName!==sh.driver)?"局へ運ぶ人　"+car.name+"（計数 "+sh.driver+"）\n":"";
+  const base=(a2,b2)=>carLine+"3cm "+a2+"個　5cm "+b2+"個　計 "+(a2+b2)+"個\n締め時刻 "+hhmm(Date.now())+
          "\n\n"+dest+"に電話を入れてから向かってください。"+((SET.postTel||"").trim()?"\n"+SET.postTel:"")+
          "\n締めた後の画面にある「局へ発信」から掛けられます。";
 
@@ -1721,15 +1754,15 @@ function paintSummary(){
 }
 
 /* ---------- CSV ---------- */
-const CSVHEAD="日付,便,ドライバー,ID,企業,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
+const CSVHEAD="日付,便,計数ドライバー,ID,運搬ドライバー,企業,電話番号,開始,締め,サイズcm,お問い合わせ番号,読取時刻,区分\n";
 function csvBody(day,shifts,withLogs){
   let out="";
   shifts.forEach(sh=>{
-    const base=[day.date,sh.bin,sh.driver,sh.driverId||"",corpName(sh.corp),sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
+    const base=[day.date,sh.bin,sh.driver,sh.driverId||"",(sh.carrierName||sh.driver||""),corpName(sh.corp),sh.tel||"",sh.startedAt?hms(sh.startedAt):"",sh.closedAt?hms(sh.closedAt):""];
     (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>{ out+=base.concat([x.size,x.no,hms(x.ts),"計数"]).join(",")+"\n"; });
   });
   if(withLogs)(day.dupLog||[]).forEach(x=>{
-    out+=[day.date,x.bin,"","","","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
+    out+=[day.date,x.bin,"","","","","","","","",x.no,hms(x.ts),"二度読み検知（初回 "+hms(x.firstTs)+"）"].join(",")+"\n";
   });
   return out;
 }
@@ -1807,6 +1840,7 @@ async function fetchDayMerged(date){
     if(v&&typeof v==="object") Object.values(v).forEach(j=>{
       if(!j||!j.key||isGone(j.key)) return;
       map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
+        carrierId:j.carrierId||"",carrierName:j.carrierName||"",
         scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
         c3:j.c3||0,c5:j.c5||0,
         startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,
@@ -1960,6 +1994,7 @@ function paintAdminDay(day,remoteLoaded){
     const pick=isStaff?'<input type="checkbox" class="pick" data-k="'+keyOf(sh)+'" onclick="event.stopPropagation()" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px">':"";
     return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+pick+sh.bin+"　"+(sh.driver||"")+callBtn+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
+      ((sh.carrierName&&sh.carrierName!==sh.driver)?"　<b style='color:#8A4B00'>運搬 "+sh.carrierName+"</b>":"")+
       (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+
       ((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
       '<div class="hint">タップで読取一覧とCSV</div>'+
@@ -2181,6 +2216,7 @@ function openDetail(day,i){
   $("detMeta").innerHTML='<div class="metabox">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
     '<div style="font-size:20px;font-weight:800;margin-top:4px">3cm '+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"</div>"+
+    ((sh.carrierName&&sh.carrierName!==sh.driver)?'<div style="margin-top:6px;font-size:14px;font-weight:700;color:#8A4B00">局へ運ぶ人　'+sh.carrierName+"</div>":"")+
     (isStaff?'<div style="margin-top:6px;font-size:14px;font-weight:700">'+corpName(sh.corp)+(sh.driverId?'<span style="font-weight:500;color:#4A5B6B">　ID '+sh.driverId+"</span>":"")+"</div>":"")+
     ((isStaff&&sh.tel)?'<div style="margin-top:6px"><a class="tel" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'">'+sh.tel+" に発信</a></div>":"")+
     (sh.exportedAt?'<div class="badge b-done" style="margin-top:8px">書き出し済 '+hhmm(sh.exportedAt)+"</div>":"")+
