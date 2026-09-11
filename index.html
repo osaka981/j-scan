@@ -384,6 +384,26 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <button class="btn wide dim hide" id="oddKeepAll">残りもすべてカウントする</button>
 </div>
 
+<!-- 局へ運ぶ人の選択 -->
+<div class="sheet full" id="shDrv">
+  <div class="sheethead">
+    <button class="btn sm dim" id="drvBack">戻る</button>
+    <span class="ttl">局へ運ぶ人</span>
+  </div>
+  <div class="metabox" id="drvNow"></div>
+  <div class="tabs" id="drvKind">
+    <button data-kind="own" class="on3">自社</button>
+    <button data-kind="co">委託会社</button>
+  </div>
+  <div class="field hide" id="drvCoWrap"><label for="drvCo">委託会社</label><select class="day" id="drvCo"></select></div>
+  <input class="search" id="drvSearch" type="text" placeholder="氏名で検索" autocomplete="off">
+  <div class="sep"></div>
+  <div id="drvList"></div>
+  <button class="btn wide" id="drvManual">この一覧にない（氏名を入力する）</button>
+  <button class="btn wide dim" id="drvSelf">計数した本人のまま進む</button>
+  <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
+</div>
+
 <!-- 手入力 -->
 <div class="sheet" id="shManual">
   <h2>番号を手入力</h2>
@@ -741,7 +761,8 @@ async function loadMaster(force){
       fbFetch(FB_URL+"/nikki/companies.json").then(r=>r.json())
     ]);
     MASTER={drivers:asArr(d).map(x=>({id:String(x.id||""),empNo:String(x.empNo||""),driverNo:String(x.driverNo||""),
-      name:x.name||"",tel:x.tel||"",company:x.company||""})),
+      name:x.name||"",tel:x.tel||"",company:x.company||"",
+      officeType:x.officeType||"",workType:x.workType||"",retired:!!x.retired})),
       companies:asArr(c).map(x=>({code:String(x.companyCode||""),name:x.name||"",owner:String(x.ownerLoginId||"")})),at:Date.now()};
     try{ localStorage.setItem(MKEY,JSON.stringify(MASTER)); }catch(e){}
     return MASTER;
@@ -906,7 +927,7 @@ window.addEventListener("focus",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-07.60";
+const APP_VER="2026-09-10.61";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1498,23 +1519,6 @@ function paintCarrier(){
     '<span style="float:right;color:var(--blue);font-weight:700">変更</span>';
   b.className="btn sm"+(same?" dim":"");
 }
-$("btnCarrier").onclick=()=>{
-  if(!inScan()) return;
-  const sh=cur();
-  ask({title:"局へ運ぶ人を指定します",
-    body:"別の人が大阪北郵便局へ持ち込む場合、その人のIDを入力してください。\n空欄のままにすると計数した本人（"+(sh.driver||"")+"）になります。",
-    input:true,okText:"設定する",
-    onOk:async v=>{
-      const t=normId(v);
-      if(!t){ sh.carrierId=""; sh.carrierName=""; save(); markDirty(sh); paintCarrier(); notify("計数した本人に戻しました",""); return; }
-      if(!MASTER) await loadMaster(false);
-      const d=findDriver(t);
-      if(d){ sh.carrierId=canonId(t); sh.carrierName=d.name; }
-      else { sh.carrierId=canonId(t); sh.carrierName="ID "+canonId(t); }
-      save(); markDirty(sh); paintCarrier();
-      notify("局へ運ぶ人を設定しました",sh.carrierName+(d?"":"（登録がないIDです。氏名は後から管理画面で確認してください）"));
-    }});
-};
 $("m3").onclick=()=>setMode(true);
 $("m5").onclick=()=>setMode(false);
 
@@ -1542,6 +1546,90 @@ $("btnLogout").onclick=()=>{
       showView(); $("btnOther").click();
     }});
 };
+
+/* ---------- 局へ運ぶ人の選択 ---------- */
+let drvKind="own", drvAfter=null;
+const isCollection=d=>{
+  if(d.retired) return false;
+  if(d.company&&!/大阪急配/.test(d.company)) return d.workType==="collection"||d.workType==="both";
+  return d.officeType==="collection";
+};
+function drvCompanies(){
+  const m=new Map();
+  ((MASTER&&MASTER.drivers)||[]).forEach(d=>{
+    if(!isCollection(d)) return;
+    const c=(d.company||"").trim();
+    if(!c||/大阪急配/.test(c)) return;
+    m.set(c,(m.get(c)||0)+1);
+  });
+  return Array.from(m.keys()).sort();
+}
+function drvCandidates(){
+  const q=($("drvSearch").value||"").trim();
+  const co=$("drvCo").value||"";
+  return ((MASTER&&MASTER.drivers)||[]).filter(d=>{
+    if(!isCollection(d)) return false;
+    const c=(d.company||"").trim();
+    const own=!c||/大阪急配/.test(c);
+    if(drvKind==="own"?!own:(own||c!==co)) return false;
+    return !q||(d.name||"").includes(q);
+  }).sort((a,b)=>(a.name||"").localeCompare(b.name||"","ja"));
+}
+function paintDrv(){
+  $("drvKind").querySelectorAll("button").forEach(b=>{
+    const k=b.getAttribute("data-kind"); b.className=k===drvKind?(k==="own"?"on3":"on5"):"";
+  });
+  $("drvCoWrap").className="field"+(drvKind==="co"?"":" hide");
+  if(drvKind==="co"){
+    const list=drvCompanies(), cur=$("drvCo").value;
+    $("drvCo").innerHTML=list.length?list.map(c=>'<option'+(c===cur?" selected":"")+">"+c+"</option>").join("")
+      :'<option value="">集荷の登録があるドライバーがいません</option>';
+  }
+  const list=drvCandidates();
+  $("drvList").innerHTML=list.length?list.map(d=>
+    '<div class="admrow" data-pick="'+(d.id||d.empNo||"")+'"><div class="a1"><div class="ttl">'+(d.name||"")+"</div>"+
+    '<div class="meta">'+(d.company||"大阪急配")+(d.id?"　"+d.id:"")+"</div></div><div class='chev'>›</div></div>").join("")
+    :'<p class="note">該当する人がいません</p>';
+  $("drvList").querySelectorAll("[data-pick]").forEach(el=>el.onclick=()=>{
+    const id=el.getAttribute("data-pick");
+    const d=list.find(x=>(x.id||x.empNo)===id); if(!d) return;
+    setCarrier(canonId(d.id||d.empNo||""),d.name||"");
+  });
+}
+function openDrvPick(after){
+  drvAfter=after||null;
+  if(!MASTER) loadMaster(false).then(paintDrv);
+  const sh=cur(), c=carrierOf(sh);
+  $("drvNow").innerHTML='<div style="font-size:13px;color:#4A5B6B">計数した人</div><div style="font-size:17px;font-weight:800">'+
+    (sh.driver||"")+'</div><div style="font-size:13px;color:#4A5B6B;margin-top:6px">いまの局へ運ぶ人</div>'+
+    '<div style="font-size:17px;font-weight:800;color:'+((sh.carrierName&&sh.carrierName!==sh.driver)?"#8A4B00":"#12212E")+'">'+
+    (c.name||"")+((sh.carrierName&&sh.carrierName!==sh.driver)?"":"（本人）")+"</div>";
+  $("drvSearch").value=""; drvKind="own";
+  openSheet("shDrv"); paintDrv();
+}
+function setCarrier(id,name){
+  const sh=cur(); if(!sh) return;
+  if(!name||name===sh.driver){ sh.carrierId=""; sh.carrierName=""; }
+  else { sh.carrierId=id||""; sh.carrierName=name; }
+  save(); markDirty(sh); paintCarrier();
+  closeSheets();
+  const f=drvAfter; drvAfter=null;
+  if(f) f(); else notify("局へ運ぶ人を設定しました",sh.carrierName||sh.driver);
+}
+$("drvKind").querySelectorAll("button").forEach(b=>b.onclick=()=>{ drvKind=b.getAttribute("data-kind"); paintDrv(); });
+$("drvCo").onchange=paintDrv;
+$("drvSearch").addEventListener("input",paintDrv);
+$("drvSelf").onclick=()=>setCarrier("","");
+$("drvManual").onclick=()=>{
+  ask({title:"氏名を入力してください",body:"一覧にない方が局へ運ぶ場合に使います。\n委託会社のオーナーページには氏名で表示されます。",
+    input:true,okText:"決定",onOk:v=>{
+      const n=String(v||"").trim();
+      if(!n){ notify("氏名が未入力です",""); return; }
+      setCarrier("",n);
+    }});
+};
+$("drvBack").onclick=()=>{ const f=drvAfter; drvAfter=null; closeSheets(); if(f) f(); };
+$("btnCarrier").onclick=()=>{ if(inScan()) openDrvPick(null); };
 
 // 他のドライバー（別端末を含む）と番号が重複していないかを締める前に確認する
 async function crossCheck(sh){
@@ -1580,9 +1668,13 @@ function doClose(sh){
   sumWho=driverKeyOf(sh)||"__all";        // 締めた本人の便だけを表示
   beep(880,120,.06); openSummary(); showView();
 }
-$("btnClose").onclick=async()=>{
+$("btnClose").onclick=()=>{
   const sh=cur();
   if(!sh.scans.length){ setBand("warn","読取が0件です","","締める前に読み取ってください"); return; }
+  openDrvPick(doCloseFlow);   // 先に「局へ運ぶ人」を確認してから締める
+};
+async function doCloseFlow(){
+  const sh=cur(); if(!sh) return;
   setBand("warn","他のドライバーとの重複を確認しています","","少しお待ちください");
   const res=await crossCheck(sh);
   const later=res.list.filter(d=>d.mineTs>=d.other.ts);   // こちらが後から読んだ分
