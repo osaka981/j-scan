@@ -391,14 +391,20 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <span class="ttl">局へ運ぶ人</span>
   </div>
   <div class="metabox" id="drvNow"></div>
+
+  <h3 style="margin-top:14px">どこの人ですか</h3>
   <div class="tabs" id="drvKind">
     <button data-kind="own" class="on3">自社</button>
     <button data-kind="co">委託会社</button>
   </div>
   <div class="field hide" id="drvCoWrap"><label for="drvCo">委託会社</label><select class="day" id="drvCo"></select></div>
+
+  <h3>ドライバーを選ぶ<span id="drvCnt" style="float:right;font-weight:700;color:var(--ink-2)"></span></h3>
   <input class="search" id="drvSearch" type="text" placeholder="氏名で検索" autocomplete="off">
   <div class="sep"></div>
   <div id="drvList"></div>
+
+  <h3>そのほか</h3>
   <button class="btn wide" id="drvManual">この一覧にない（氏名を入力する）</button>
   <button class="btn wide dim" id="drvSelf">計数した本人のまま進む</button>
   <div class="jump"><button data-jump="top">先頭へ</button><button data-jump="bottom">末尾へ</button></div>
@@ -927,7 +933,7 @@ window.addEventListener("focus",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-10.61";
+const APP_VER="2026-09-11.62";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1586,10 +1592,13 @@ function paintDrv(){
       :'<option value="">集荷の登録があるドライバーがいません</option>';
   }
   const list=drvCandidates();
+  const q=($("drvSearch").value||"").trim();
+  $("drvCnt").textContent=list.length+"人"+(q?"（検索中）":"");
+  const hit=(n)=>{ if(!q) return n; const i=n.indexOf(q); return i<0?n:n.slice(0,i)+"<mark class='hit'>"+n.slice(i,i+q.length)+"</mark>"+n.slice(i+q.length); };
   $("drvList").innerHTML=list.length?list.map(d=>
-    '<div class="admrow" data-pick="'+(d.id||d.empNo||"")+'"><div class="a1"><div class="ttl">'+(d.name||"")+"</div>"+
+    '<div class="admrow" data-pick="'+(d.id||d.empNo||"")+'"><div class="a1"><div class="ttl" style="font-size:17px">'+hit(d.name||"")+"</div>"+
     '<div class="meta">'+(d.company||"大阪急配")+(d.id?"　"+d.id:"")+"</div></div><div class='chev'>›</div></div>").join("")
-    :'<p class="note">該当する人がいません</p>';
+    :'<p class="note">'+(q?"「"+q+"」に一致する人がいません":"該当する人がいません")+"</p>";
   $("drvList").querySelectorAll("[data-pick]").forEach(el=>el.onclick=()=>{
     const id=el.getAttribute("data-pick");
     const d=list.find(x=>(x.id||x.empNo)===id); if(!d) return;
@@ -1600,10 +1609,16 @@ function openDrvPick(after){
   drvAfter=after||null;
   if(!MASTER) loadMaster(false).then(paintDrv);
   const sh=cur(), c=carrierOf(sh);
-  $("drvNow").innerHTML='<div style="font-size:13px;color:#4A5B6B">計数した人</div><div style="font-size:17px;font-weight:800">'+
-    (sh.driver||"")+'</div><div style="font-size:13px;color:#4A5B6B;margin-top:6px">いまの局へ運ぶ人</div>'+
-    '<div style="font-size:17px;font-weight:800;color:'+((sh.carrierName&&sh.carrierName!==sh.driver)?"#8A4B00":"#12212E")+'">'+
-    (c.name||"")+((sh.carrierName&&sh.carrierName!==sh.driver)?"":"（本人）")+"</div>";
+  const diff=!!(sh.carrierName&&sh.carrierName!==sh.driver);
+  $("drvNow").innerHTML=
+    '<div style="display:flex;gap:14px;align-items:flex-start">'+
+      '<div style="flex:1"><div style="font-size:12px;color:#4A5B6B;font-weight:600">計数した人</div>'+
+      '<div style="font-size:18px;font-weight:800">'+(sh.driver||"")+"</div></div>"+
+      '<div style="flex:1;padding-left:14px;border-left:2px solid #B9C7D6">'+
+      '<div style="font-size:12px;color:#4A5B6B;font-weight:600">局へ運ぶ人</div>'+
+      '<div style="font-size:18px;font-weight:800;color:'+(diff?"#8A4B00":"#12212E")+'">'+(c.name||"")+"</div>"+
+      '<div style="font-size:11px;color:'+(diff?"#8A4B00":"#4A5B6B")+'">'+(diff?"別の人を指定中":"計数した本人")+"</div></div>"+
+    "</div>";
   $("drvSearch").value=""; drvKind="own";
   openSheet("shDrv"); paintDrv();
 }
