@@ -2157,14 +2157,17 @@ let admCustId=null;
 /* ★ 2026/09/12: 顧客用URL( ?c=<slug> )の扱い。
    このファイルの末尾でクエリを消しているため、先に控えて端末にも残す。
    ホーム画面に追加した場合も顧客が固定されたままになる。 */
-const CUSTSLUG_LS = "jscan_cust_slug";
+/* ★ 2026/09/12 修正: 以前は ?c= を端末に保存し、次回から通常のURLで開いても
+   顧客専用ページのままだった。ドライバーの端末で配布URLを誤って開くと
+   業務ができなくなるため、保存をやめてURLのパラメータだけで判定する。
+   ホーム画面に追加する場合は、?c= 付きのURLのまま追加してもらう
+   （追加したショートカットはパラメータを保持する）。 */
 let CUST_SLUG = "";
 (function(){
-  try{
-    const p = new URLSearchParams(location.search).get("c");
-    if(p){ CUST_SLUG = p; try{ localStorage.setItem(CUSTSLUG_LS, p); }catch(e){} }
-    else { CUST_SLUG = localStorage.getItem(CUSTSLUG_LS) || ""; }
-  }catch(e){ CUST_SLUG = ""; }
+  try{ CUST_SLUG = new URLSearchParams(location.search).get("c") || ""; }
+  catch(e){ CUST_SLUG = ""; }
+  // 以前の版が保存した値が残っていると顧客専用のままになるので消す
+  try{ localStorage.removeItem("jscan_cust_slug"); }catch(e){}
 })();
 const isCustMode = () => !!CUST_SLUG;
 
@@ -2944,7 +2947,11 @@ loadJetCusts().then(()=>{
   if(isCustMode() && !adminOK){ try{ $("btnAdmin").click(); }catch(e){} }
 });
 showView(); render(); scheduleSync(1500);
-try{ if(location.search&&history.replaceState) history.replaceState(null,"",location.pathname); }catch(e){}
+// ★ 2026/09/12: 顧客用URL(?c=)は消さない。消すと再読込で顧客専用モードから抜けてしまう。
+try{
+  if(location.search && history.replaceState && !isCustMode())
+    history.replaceState(null,"",location.pathname);
+}catch(e){}
 </script>
 </body>
 </html>
