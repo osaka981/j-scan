@@ -865,8 +865,25 @@ const shiftKey=sh=>DEVICE+"_"+sh.id;
    顧客用の管理画面が自社の便だけを読めるようにするため、jet_scan だけ階層を分ける。
    番号明細(jet_scan_nos)と写真(jet_photos)は便キーが端末ID込みで一意なので、
    便単位で読めば他社のものは混ざらない。階層は分けない。 */
-const jetScanPath=(custId,date,key)=>
-  "/nikki/jet_scan/"+encodeURIComponent(String(custId||"_legacy"))+"/"+date+(key?("/"+key):"");
+const jetScanPath=(custId,date,key)=>{
+  // 顧客IDが分からない便（多顧客化より前に始めた便）は旧形式の位置に読み書きする。
+  const c=String(custId||"").trim();
+  const head = (c && c!=="_legacy") ? ("/"+encodeURIComponent(c)) : "";
+  return "/nikki/jet_scan"+head+"/"+date+(key?("/"+key):"");
+};
+// 顧客別の位置に無ければ旧形式の位置も見る（移行期間のため）
+async function fetchJetScan(custId,date){
+  try{
+    const r=await fbFetch(FB_URL+jetScanPath(custId,date)+".json");
+    const v=await r.json();
+    if(v && Object.keys(v).length) return v;
+  }catch(e){}
+  if(!custId) return null;
+  try{
+    const r2=await fbFetch(FB_URL+"/nikki/jet_scan/"+date+".json");
+    return await r2.json();
+  }catch(e){ return null; }
+}
 const shCustId=sh=>String((sh&&sh.custId)||S.custId||"_legacy");
 const keyOf=sh=>sh._key||shiftKey(sh);
 // 同じドライバー（IDが同じ。IDが無ければ氏名）の便を数える
@@ -1698,7 +1715,7 @@ async function crossCheck(sh){
   const out=[];
   try{
     const [sr,nr]=await Promise.all([
-      fbFetch(FB_URL+jetScanPath(S.custId,S.date)+".json"),
+      Promise.resolve({json:()=>fetchJetScan(S.custId,S.date)}),
       fbFetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+".json")
     ]);
     const sum=(await sr.json())||{}, nos=(await nr.json())||{};
@@ -1824,7 +1841,7 @@ let dayAll=[], dayAllAt=0, dayAllRemote=false;
 async function fetchDayAll(){
   const map=new Map();
   try{
-    const r=await fbFetch(FB_URL+jetScanPath(S.custId,S.date)+".json"); const v=await r.json();
+    const v=await fetchJetScan(S.custId,S.date);
     if(v&&typeof v==="object"){
       Object.values(v).forEach(j=>{ if(!j||!j.key||isGone(j.key)) return;
         map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
@@ -2071,18 +2088,29 @@ function applyCustMode(){
 let admRemoteDates=[], admCurDay=null;
 async function fetchRemoteDates(){
   try{
-    // ★ 2026/09/12: 顧客ごとの階層になったので、対象顧客の配下から日付を拾う。
-    const cid=admCustId||S.custId||"_legacy";
-    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+encodeURIComponent(cid)+".json?shallow=true");
-    const v=await r.json();
-    admRemoteDates=v?Object.keys(v).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)):[];
+    // ★ 2026/09/12: 顧客配下の日付と、旧形式（直下が日付）の両方から集める。
+    const cid=admCustId||S.custId||"";
+    const set=new Set();
+    if(cid){
+      try{
+        const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+encodeURIComponent(cid)+".json?shallow=true");
+        const v=await r.json();
+        if(v) Object.keys(v).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).forEach(d=>set.add(d));
+      }catch(e){}
+    }
+    try{
+      const r0=await fbFetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
+      const v0=await r0.json();
+      if(v0) Object.keys(v0).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).forEach(d=>set.add(d));
+    }catch(e){}
+    admRemoteDates=Array.from(set);
   }catch(e){}
 }
 async function fetchDayMerged(date){
   const map=new Map();
   try{
-    const cid=admCustId||S.custId||"_legacy";
-    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+encodeURIComponent(cid)+"/"+date+".json"); const v=await r.json();
+    const cid=admCustId||S.custId||"";
+    const v=await fetchJetScan(cid,date);
     if(v&&typeof v==="object") Object.values(v).forEach(j=>{
       if(!j||!j.key||isGone(j.key)) return;
       map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
