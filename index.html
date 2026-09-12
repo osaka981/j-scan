@@ -800,6 +800,14 @@ async function resolveId(){
   if(!normId(raw)){ msg.textContent=""; return; }
   if(!MASTER){ msg.textContent="登録データを読み込み中"; await loadMaster(false); }
   let d=findDriver(raw);
+  // ★ 2026/09/12: 未登録と判定する前に最新のマスタを取り直す。
+  //   登録データは30分キャッシュしているため、経営管理でドライバーを登録した直後は
+  //   古いデータを見て「登録がないID」と表示され続けていた。
+  if(!d && !findCompany(raw)){
+    msg.textContent="登録データを更新中";
+    await loadMaster(true);
+    d=findDriver(raw);
+  }
   if(d&&!d.tel){                       // 電話番号が未反映のときは最新を取り直す
     msg.textContent="登録データを更新中";
     await loadMaster(true);
