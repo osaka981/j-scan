@@ -2169,10 +2169,10 @@ let CUST_SLUG = "";
 const isCustMode = () => !!CUST_SLUG;
 
 /* ★ 2026/09/12: 顧客アカウントでのログイン。
-   経営管理で発行したアカウント（<slug>@jscan.osaka981.local）でログインすると、
+   経営管理で発行したアカウント（<slug>@scan.local）でログインすると、
    Firebaseのルール側でもその顧客の階層だけに絞られる。
    アカウントが未発行の顧客は、従来の暗証番号でも開ける（移行期間のため）。 */
-const CUST_MAIL_DOMAIN = "jscan.osaka981.local";
+const CUST_MAIL_DOMAIN = "scan.local";
 function custEmailFor(slug){ return String(slug||"") + "@" + CUST_MAIL_DOMAIN; }
 let custSignedIn = false;
 
