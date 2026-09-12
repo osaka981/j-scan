@@ -927,14 +927,21 @@ const jetScanPath=(custId,date,key)=>{
   const head = (c && c!=="_legacy") ? ("/"+encodeURIComponent(c)) : "";
   return "/nikki/jet_scan"+head+"/"+date+(key?("/"+key):"");
 };
-// 顧客別の位置に無ければ旧形式の位置も見る（移行期間のため）
-async function fetchJetScan(custId,date){
-  try{
-    const r=await fbFetch(FB_URL+jetScanPath(custId,date)+".json");
-    const v=await r.json();
-    if(v && Object.keys(v).length) return v;
-  }catch(e){}
-  if(!custId) return null;
+/* 顧客別の位置を読む。旧形式（直下が日付）へのフォールバックは
+   ★ 2026/09/12 修正: 顧客を指定して読むときは行わない。
+   移行前は旧形式に全顧客分が混在しているため、どの顧客を選んでも
+   同じ旧データが出てしまい、他社の数字が見えてしまっていた。
+   旧形式は、顧客が特定できないとき（社内用で顧客未選択など）だけ読む。 */
+async function fetchJetScan(custId,date,allowLegacy){
+  const c=String(custId||"").trim();
+  if(c){
+    try{
+      const r=await fbFetch(FB_URL+jetScanPath(c,date)+".json");
+      const v=await r.json();
+      if(v && Object.keys(v).length) return v;
+    }catch(e){}
+    if(!allowLegacy) return null;
+  }
   try{
     const r2=await fbFetch(FB_URL+"/nikki/jet_scan/"+date+".json");
     return await r2.json();
@@ -947,14 +954,17 @@ const jetNosPath=(custId,date,key)=>{
   const head=(c && c!=="_legacy")?("/"+encodeURIComponent(c)):"";
   return "/nikki/jet_scan_nos"+head+"/"+date+(key?("/"+key):"");
 };
-// 顧客別の位置に無ければ旧形式の位置も見る（移行期間のため）
-async function fetchJetNos(custId,date){
-  try{
-    const r=await fbFetch(FB_URL+jetNosPath(custId,date)+".json");
-    const v=await r.json();
-    if(v && Object.keys(v).length) return v;
-  }catch(e){}
-  if(!custId) return null;
+// ★ 2026/09/12: 番号明細も同じ考え方（顧客指定時は旧形式を読まない）
+async function fetchJetNos(custId,date,allowLegacy){
+  const c=String(custId||"").trim();
+  if(c){
+    try{
+      const r=await fbFetch(FB_URL+jetNosPath(c,date)+".json");
+      const v=await r.json();
+      if(v && Object.keys(v).length) return v;
+    }catch(e){}
+    if(!allowLegacy) return null;
+  }
   try{
     const r2=await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+date+".json");
     return await r2.json();
@@ -2309,11 +2319,14 @@ async function fetchRemoteDates(){
         if(v) Object.keys(v).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).forEach(d=>set.add(d));
       }catch(e){}
     }
-    try{
-      const r0=await fbFetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
-      const v0=await r0.json();
-      if(v0) Object.keys(v0).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).forEach(d=>set.add(d));
-    }catch(e){}
+    // ★ 2026/09/12: 顧客を指定しているときは旧形式の日付を混ぜない
+    if(!cid){
+      try{
+        const r0=await fbFetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
+        const v0=await r0.json();
+        if(v0) Object.keys(v0).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)).forEach(d=>set.add(d));
+      }catch(e){}
+    }
     admRemoteDates=Array.from(set);
   }catch(e){}
 }
