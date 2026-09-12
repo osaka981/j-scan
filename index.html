@@ -354,6 +354,11 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <h2 id="askTitle"></h2>
   <div class="body" id="askBody"></div>
   <div class="field hide" id="askField"><input id="askInput" type="tel" inputmode="numeric" autocomplete="off"></div>
+  <!-- ★ 2026/09/12: 自動ログインの選択（顧客用ページのパスワード入力で使う） -->
+  <label class="hide" id="askChkWrap" style="display:flex;align-items:center;gap:8px;margin:2px 0 10px;font-size:15px;cursor:pointer;">
+    <input type="checkbox" id="askChk" style="width:20px;height:20px;">
+    <span id="askChkLabel"></span>
+  </label>
   <button class="btn wide" id="askOk">OK</button>
   <button class="btn wide hide" id="askAlt">もう一つ</button>
   <button class="btn wide hide" id="askAlt2">もう一つ</button>
@@ -466,7 +471,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
        顧客用ページからも、弊社の管理ページからも編集できる。 -->
   <!-- ★ 2026/09/12: 普段は触らない設定なので折りたたみにする -->
   <details id="admPostBox" style="margin-top:10px;border:1px solid #D6DEE7;border-radius:8px;padding:8px 10px;">
-    <summary style="font-weight:700;cursor:pointer;">発信先（郵便局 大口窓口）の登録</summary>
+    <summary style="font-weight:700;cursor:pointer;">発信先（出発前に持込企業または貴社への事前連絡先が必要な場合）の登録</summary>
     <p class="note" id="setPostWho"></p>
     <div class="field"><label for="setPostName">名称</label><input id="setPostName" type="text" placeholder="大阪北郵便局 大口窓口"></div>
     <div class="field"><label for="setPostTel">電話番号</label><input id="setPostTel" type="tel" inputmode="tel" placeholder="06-0000-0000"></div>
@@ -1099,6 +1104,16 @@ function ask(o){
   $("askBody").style.display=o.body?"":"none";
   $("askField").className=o.input?"field":"field hide";
   $("askInput").value="";
+  // ★ 2026/09/12: チェックボックス（checkLabel を渡したときだけ出す）
+  const _cw=$("askChkWrap");
+  if(_cw){
+    _cw.className=o.checkLabel?"":"hide";
+    if(o.checkLabel){
+      _cw.style.display="flex";
+      $("askChkLabel").textContent=o.checkLabel;
+      $("askChk").checked=(o.checkDefault!==false);
+    } else { _cw.style.display="none"; }
+  }
   $("askOk").textContent=o.okText||"OK";
   $("askOk").className="btn wide"+(o.danger?" danger":"");
   askOnAlt=o.onAlt||null;
@@ -1109,12 +1124,23 @@ function ask(o){
   $("askAlt2").className="btn wide"+(o.alt2Text?"":" hide");
   $("askCancel").className="btn wide dim"+(o.noCancel?" hide":"");
   $("askScrim").classList.add("on"); $("askBox").classList.add("on");
+  // ★ 2026/09/12: パスワード入力のときは伏せ字にし、数字キーボードにしない
+  const _ai=$("askInput");
+  if(_ai){
+    _ai.type = o.password ? "password" : "tel";
+    if(o.password) _ai.removeAttribute("inputmode");
+    else _ai.setAttribute("inputmode","numeric");
+  }
   if(o.input) setTimeout(()=>$("askInput").focus(),90);
 }
 function askClose(){ askOpen=false; askOnOk=null; askOnAlt=null; askOnAlt2=null; $("askScrim").classList.remove("on"); $("askBox").classList.remove("on"); }
 $("askCancel").onclick=askClose;
 $("askScrim").onclick=askClose;
-$("askOk").onclick=()=>{ const v=$("askInput").value; const cb=askOnOk; askClose(); if(cb) cb(v); };
+$("askOk").onclick=()=>{
+  const v=$("askInput").value;
+  const chk=!!($("askChk") && $("askChk").checked);   // ★ 2026/09/12
+  const cb=askOnOk; askClose(); if(cb) cb(v, chk);
+};
 $("askAlt").onclick=()=>{ const cb=askOnAlt; askClose(); if(cb) cb(); };
 $("askAlt2").onclick=()=>{ const cb=askOnAlt2; askClose(); if(cb) cb(); };
 $("askInput").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("askOk").click(); } });
@@ -2343,11 +2369,12 @@ const cnt=sh=>{
 $("btnAdmin").onclick=()=>{
   if(!adminOK){
     ask({title:(isCustMode()?"集荷状況を見る":"管理画面"),
-      body:(isCustMode()
-        ?"パスワードを入力してください。\n入力後、この端末では次回から自動で開きます。"
-        :"暗証番号を入力してください。"),
-      input:true,okText:"開く",
-      onOk:async v=>{
+      body:(isCustMode()?"パスワードを入力してください。":"暗証番号を入力してください。"),
+      input:true, password:isCustMode(), okText:"開く",
+      // ★ 2026/09/12: 自動ログインを選べるようにする（共用端末では外せる）
+      checkLabel:(isCustMode()?"次回からこの端末で自動ログインする":""),
+      checkDefault:true,
+      onOk:async (v, remember)=>{
         // ★ 2026/09/12: ハッシュで照合する。
         //   社内用の番号なら全顧客を見られる。顧客用URLで開いている場合は、
         //   その顧客に設定された番号でも開ける（見えるのはその顧客の分だけ）。
@@ -2357,7 +2384,11 @@ $("btnAdmin").onclick=()=>{
         if(isCustMode()){
           const r = await custSignIn(t);
           if(r.ok){
-            try{ localStorage.setItem(CUST_REMEMBER_LS,"1"); }catch(e){}
+            // ★ 2026/09/12: チェックが外れていれば自動ログインしない
+            try{
+              if(remember) localStorage.setItem(CUST_REMEMBER_LS,"1");
+              else localStorage.removeItem(CUST_REMEMBER_LS);
+            }catch(e){}
             await loadJetCusts();
             const tc = jetCustBySlug(CUST_SLUG);
             isStaff=false; admCustId = tc ? String(tc.id) : null;
