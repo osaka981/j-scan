@@ -921,10 +921,17 @@ const shiftKey=sh=>DEVICE+"_"+sh.id;
    便キーが一意なので混ざる心配はないが、Firebaseのルールで顧客ごとに
    読める範囲を絞るには、パスに顧客が含まれている必要があるため。
    写真(jet_photos)は弊社内部の証跡で顧客には見せないため、階層は分けない。 */
+/* ★ 2026/09/12(夜) 運用優先の暫定対応:
+   顧客ごとの階層に移す作業が完了していないため、読み書きは旧形式
+   （jet_scan/<日付>/<便キー>）に戻す。9月のデータはこの位置にあり、
+   経営管理も正しく読めている。
+   顧客IDは便のデータ（custId / custName）に記録し続けるので、
+   後から階層に分ける移行はいつでもできる。
+   ※ 顧客用ページでの分離は、階層化が終わるまで成立しない。 */
+const JET_USE_CUST_PATH = false;
 const jetScanPath=(custId,date,key)=>{
-  // 顧客IDが分からない便（多顧客化より前に始めた便）は旧形式の位置に読み書きする。
   const c=String(custId||"").trim();
-  const head = (c && c!=="_legacy") ? ("/"+encodeURIComponent(c)) : "";
+  const head = (JET_USE_CUST_PATH && c && c!=="_legacy") ? ("/"+encodeURIComponent(c)) : "";
   return "/nikki/jet_scan"+head+"/"+date+(key?("/"+key):"");
 };
 /* 顧客別の位置を読む。旧形式（直下が日付）へのフォールバックは
@@ -933,7 +940,7 @@ const jetScanPath=(custId,date,key)=>{
    同じ旧データが出てしまい、他社の数字が見えてしまっていた。
    旧形式は、顧客が特定できないとき（社内用で顧客未選択など）だけ読む。 */
 async function fetchJetScan(custId,date,allowLegacy){
-  const c=String(custId||"").trim();
+  const c=JET_USE_CUST_PATH ? String(custId||"").trim() : "";
   if(c){
     try{
       const r=await fbFetch(FB_URL+jetScanPath(c,date)+".json");
@@ -951,12 +958,12 @@ const shCustId=sh=>String((sh&&sh.custId)||S.custId||"_legacy");
 // 番号明細も同じ考え方で顧客ごとに分ける。顧客が分からない便は旧形式の位置。
 const jetNosPath=(custId,date,key)=>{
   const c=String(custId||"").trim();
-  const head=(c && c!=="_legacy")?("/"+encodeURIComponent(c)):"";
+  const head=(JET_USE_CUST_PATH && c && c!=="_legacy")?("/"+encodeURIComponent(c)):"";
   return "/nikki/jet_scan_nos"+head+"/"+date+(key?("/"+key):"");
 };
 // ★ 2026/09/12: 番号明細も同じ考え方（顧客指定時は旧形式を読まない）
 async function fetchJetNos(custId,date,allowLegacy){
-  const c=String(custId||"").trim();
+  const c=JET_USE_CUST_PATH ? String(custId||"").trim() : "";
   if(c){
     try{
       const r=await fbFetch(FB_URL+jetNosPath(c,date)+".json");
@@ -2310,7 +2317,7 @@ let admRemoteDates=[], admCurDay=null;
 async function fetchRemoteDates(){
   try{
     // ★ 2026/09/12: 顧客配下の日付と、旧形式（直下が日付）の両方から集める。
-    const cid=admCustId||S.custId||"";
+    const cid=JET_USE_CUST_PATH ? (admCustId||S.custId||"") : "";
     const set=new Set();
     if(cid){
       try{
