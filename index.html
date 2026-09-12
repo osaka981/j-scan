@@ -1936,8 +1936,25 @@ function corpFromId(id){
 }
 const normId=id=>String(id||"").replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0)).replace(/[－ー–—]/g,"-").trim();
 
-const PIN_STAFF="1108";   // 大阪急配（社内）
-const PIN_CLIENT="0981";  // お客様（閲覧・提出用CSVのみ）
+// ★ 2026/09/12: 暗証番号をソースに直書きしていたため、公開ページのソースを
+//   見れば誰でも読める状態だった（お客様も使うアプリのため実害が大きい）。
+//   SHA-256 のハッシュだけを置き、入力値をハッシュ化して比較する形に変更。
+//   ハッシュから元の番号は逆算できない。
+//   番号を変えるときは、下のハッシュを新しい値のものに差し替える。
+//   ハッシュの作り方（ブラウザのコンソールで実行）:
+//     await (async p => {
+//       const b = new TextEncoder().encode('osq-jscan-pin-v1|' + p);
+//       const d = await crypto.subtle.digest('SHA-256', b);
+//       return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,'0')).join('');
+//     })('新しい番号')
+const PIN_SALT   = "osq-jscan-pin-v1";
+const PIN_STAFF_H  = "38d62f159f1b3d7f01f262d87a5c9b210342bb074e2dde369a3de48746f20283";  // 大阪急配（社内）
+const PIN_CLIENT_H = "4777b718813fd452e161b374421486d85c12473356efab6f9265b2412ca5de4c";  // お客様（閲覧・提出用CSVのみ）
+async function pinHash(p){
+  const b = new TextEncoder().encode(PIN_SALT + "|" + String(p));
+  const d = await crypto.subtle.digest("SHA-256", b);
+  return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,"0")).join("");
+}
 let adminOK=false, isStaff=false, admArchive=[], admDate=null;
 
 let admRemoteDates=[], admCurDay=null;
@@ -2029,10 +2046,14 @@ const cnt=sh=>{
 $("btnAdmin").onclick=()=>{
   if(!adminOK){
     ask({title:"管理画面",body:"暗証番号を入力してください。",input:true,okText:"開く",
-      onOk:v=>{
+      onOk:async v=>{
+        // ★ 2026/09/12: ハッシュで照合する
         const t=String(v).trim();
-        if(t===PIN_STAFF){ isStaff=true; }
-        else if(t===PIN_CLIENT){ isStaff=false; }
+        let h="";
+        try{ h=await pinHash(t); }
+        catch(e){ notify("照合できませんでした",""); return; }
+        if(h===PIN_STAFF_H){ isStaff=true; }
+        else if(h===PIN_CLIENT_H){ isStaff=false; }
         else { notify("暗証番号が違います",""); return; }
         adminOK=true; openAdmin();
       }});
