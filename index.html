@@ -579,7 +579,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <script type="module">
 // ── Firebase 匿名認証：正規のアプリからのアクセスであることを名乗る ──
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInAnonymously, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+// ★ 2026/09/12: 顧客用ページはアカウントでログインする（ルールで範囲を絞るため）
+import { getAuth, signInAnonymously, onIdTokenChanged,
+         signInWithEmailAndPassword, updatePassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 const FB_CONFIG={
   apiKey:"AIzaSyDDsNZnlG3swyRtuCbMjkUkZpH4X68gUiI",
   authDomain:"osq-report-3db91.firebaseapp.com",
@@ -598,6 +600,8 @@ try{
     if(u){ try{ window._fbToken=await u.getIdToken(); }catch(e){} }
     window._fbReadyDone(true);
   });
+  window._fbAuth = auth;
+  window._fbAuthFns = { signInWithEmailAndPassword, updatePassword, signOut };
   signInAnonymously(auth).catch(()=>window._fbReadyDone(false));
   setInterval(async()=>{ try{ const u=auth.currentUser; if(u) window._fbToken=await u.getIdToken(); }catch(e){} },30*60*1000);
   setTimeout(()=>window._fbReadyDone(false),6000);   // 認証が返らなくても止めない
@@ -894,8 +898,10 @@ const shiftKey=sh=>DEVICE+"_"+sh.id;
      新: nikki/jet_scan/<顧客ID>/<日付>/<便キー>
      旧: nikki/jet_scan/<日付>/<便キー>       ← ジェット1社時代のデータ
    顧客用の管理画面が自社の便だけを読めるようにするため、jet_scan だけ階層を分ける。
-   番号明細(jet_scan_nos)と写真(jet_photos)は便キーが端末ID込みで一意なので、
-   便単位で読めば他社のものは混ざらない。階層は分けない。 */
+   ★ 2026/09/12(追記): 番号明細(jet_scan_nos)も顧客ごとの階層に分けた。
+   便キーが一意なので混ざる心配はないが、Firebaseのルールで顧客ごとに
+   読める範囲を絞るには、パスに顧客が含まれている必要があるため。
+   写真(jet_photos)は弊社内部の証跡で顧客には見せないため、階層は分けない。 */
 const jetScanPath=(custId,date,key)=>{
   // 顧客IDが分からない便（多顧客化より前に始めた便）は旧形式の位置に読み書きする。
   const c=String(custId||"").trim();
@@ -916,6 +922,25 @@ async function fetchJetScan(custId,date){
   }catch(e){ return null; }
 }
 const shCustId=sh=>String((sh&&sh.custId)||S.custId||"_legacy");
+// 番号明細も同じ考え方で顧客ごとに分ける。顧客が分からない便は旧形式の位置。
+const jetNosPath=(custId,date,key)=>{
+  const c=String(custId||"").trim();
+  const head=(c && c!=="_legacy")?("/"+encodeURIComponent(c)):"";
+  return "/nikki/jet_scan_nos"+head+"/"+date+(key?("/"+key):"");
+};
+// 顧客別の位置に無ければ旧形式の位置も見る（移行期間のため）
+async function fetchJetNos(custId,date){
+  try{
+    const r=await fbFetch(FB_URL+jetNosPath(custId,date)+".json");
+    const v=await r.json();
+    if(v && Object.keys(v).length) return v;
+  }catch(e){}
+  if(!custId) return null;
+  try{
+    const r2=await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+date+".json");
+    return await r2.json();
+  }catch(e){ return null; }
+}
 const keyOf=sh=>sh._key||shiftKey(sh);
 // 同じドライバー（IDが同じ。IDが無ければ氏名）の便を数える
 function sameDriver(sh,id,name){
@@ -961,7 +986,7 @@ async function syncNow(){
       // 番号一覧は 20件たまるごと / 減ったとき / 締めたとき だけ送る（通信量対策）
       const nlen=sh.scans.length, plen=sh._nosLen||0;
       if(nlen-plen>=100||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
-        const nr=await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+"/"+shiftKey(sh)+".json",
+        const nr=await fbFetch(FB_URL+jetNosPath(shCustId(sh),S.date,shiftKey(sh))+".json",
           {method:"PUT",headers:{"Content-Type":"application/json"},
            body:JSON.stringify(sh.scans.map(x=>({n:x.no,s:x.size,t:x.ts})))});
         if(nr.ok){ sh._nosLen=nlen; if(sh.closed) sh._nosDone=true; }
@@ -1753,7 +1778,7 @@ async function crossCheck(sh){
   try{
     const [sr,nr]=await Promise.all([
       Promise.resolve({json:()=>fetchJetScan(S.custId,S.date)}),
-      fbFetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+".json")
+      Promise.resolve({json:()=>fetchJetNos(S.custId,S.date)})
     ]);
     const sum=(await sr.json())||{}, nos=(await nr.json())||{};
     const idx=new Map();                       // 番号 -> 先に読んだ人
@@ -1855,7 +1880,7 @@ function isGone(k){
 async function fbDeleteShift(day,sh){
   markGone(keyOf(sh));
   try{ await fbFetch(FB_URL+jetScanPath(shCustId(sh),day.date,keyOf(sh))+".json",{method:"DELETE"}); }catch(e){}
-  try{ await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
+  try{ await fbFetch(FB_URL+jetNosPath(shCustId(sh),day.date,keyOf(sh))+".json",{method:"DELETE"}); }catch(e){}
 }
 $("btnCancelShift").onclick=()=>{
   if(!inScan()) return;
@@ -2143,6 +2168,43 @@ let CUST_SLUG = "";
 })();
 const isCustMode = () => !!CUST_SLUG;
 
+/* ★ 2026/09/12: 顧客アカウントでのログイン。
+   経営管理で発行したアカウント（<slug>@jscan.osaka981.local）でログインすると、
+   Firebaseのルール側でもその顧客の階層だけに絞られる。
+   アカウントが未発行の顧客は、従来の暗証番号でも開ける（移行期間のため）。 */
+const CUST_MAIL_DOMAIN = "jscan.osaka981.local";
+function custEmailFor(slug){ return String(slug||"") + "@" + CUST_MAIL_DOMAIN; }
+let custSignedIn = false;
+
+async function custSignIn(pw){
+  const fns = window._fbAuthFns || {};
+  const auth = window._fbAuth;
+  if(!auth || !fns.signInWithEmailAndPassword) return { ok:false, reason:"sdk" };
+  try{
+    const cred = await fns.signInWithEmailAndPassword(auth, custEmailFor(CUST_SLUG), String(pw));
+    window._fbToken = await cred.user.getIdToken();
+    custSignedIn = true;
+    return { ok:true };
+  }catch(e){
+    const code = String((e&&e.code)||"");
+    if(code==="auth/user-not-found" || code==="auth/invalid-email"){
+      return { ok:false, reason:"noaccount" };   // 未発行 → 暗証番号方式にまわす
+    }
+    return { ok:false, reason:"bad" };           // パスワード違い
+  }
+}
+async function custChangePassword(cur, next){
+  const fns = window._fbAuthFns || {};
+  const auth = window._fbAuth;
+  if(!auth || !fns.signInWithEmailAndPassword || !fns.updatePassword) return false;
+  try{
+    const cred = await fns.signInWithEmailAndPassword(auth, custEmailFor(CUST_SLUG), String(cur));
+    await fns.updatePassword(cred.user, String(next));
+    window._fbToken = await cred.user.getIdToken();
+    return true;
+  }catch(e){ return false; }
+}
+
 // 顧客用モードでは計数の操作を出さない（閲覧とCSVだけ）
 function applyCustMode(){
   if(!isCustMode()) return;
@@ -2206,7 +2268,8 @@ async function ensureScans(date,shifts){
   const need=shifts.filter(sh=>!Array.isArray(sh.scans));
   if(!need.length) return true;
   try{
-    const r=await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+date+".json");
+    const cidN=admCustId||S.custId||"";
+    const r={json:()=>fetchJetNos(cidN,date)};
     const v=(await r.json())||{};
     need.forEach(sh=>{
       const a=v[sh._key];
@@ -2268,6 +2331,19 @@ $("btnAdmin").onclick=()=>{
         //   社内用の番号なら全顧客を見られる。顧客用URLで開いている場合は、
         //   その顧客に設定された番号でも開ける（見えるのはその顧客の分だけ）。
         const t=String(v).trim();
+        // ★ 2026/09/12: 顧客用URLなら、まずアカウントでのログインを試す。
+        //   アカウントが発行済みならこちらが本筋。未発行なら従来の暗証番号に進む。
+        if(isCustMode()){
+          const r = await custSignIn(t);
+          if(r.ok){
+            await loadJetCusts();
+            const tc = jetCustBySlug(CUST_SLUG);
+            isStaff=false; admCustId = tc ? String(tc.id) : null;
+            adminOK=true; openAdmin(); return;
+          }
+          if(r.reason==="bad"){ notify("パスワードが違います",""); return; }
+          // noaccount / sdk → 従来の暗証番号で照合する
+        }
         let h="";
         try{ h=await pinHash(t); }
         catch(e){ notify("照合できませんでした",""); return; }
@@ -2349,9 +2425,20 @@ if(_btnPinChange) _btnPinChange.onclick=async ()=>{
   const n2 =String($("pinNew2")?.value||"").trim();
   const c=jetCustBySlug(CUST_SLUG);
   if(!c){ notify("顧客が特定できません","大阪急配へご連絡ください。"); return; }
-  if(!/^\d{4,8}$/.test(n1)){ notify("新しい暗証番号を確認してください","4〜8桁の数字で入力してください。"); return; }
-  if(n1!==n2){ notify("新しい暗証番号が一致しません",""); return; }
-  if(/^(\d)\1+$/.test(n1)){ notify("その番号は使えません","同じ数字の繰り返しは避けてください。"); return; }
+  if(n1!==n2){ notify("新しい入力が一致しません",""); return; }
+  if(!custSignedIn){
+    if(!/^\d{4,8}$/.test(n1)){ notify("新しい暗証番号を確認してください","4〜8桁の数字で入力してください。"); return; }
+    if(/^(\d)\1+$/.test(n1)){ notify("その番号は使えません","同じ数字の繰り返しは避けてください。"); return; }
+  }
+  // ★ 2026/09/12: アカウントでログインしている場合はそちらのパスワードを変える
+  if(custSignedIn){
+    if(!/^.{6,}$/.test(n1)){ notify("新しいパスワードが短すぎます","6文字以上にしてください。"); return; }
+    const ok2=await custChangePassword(cur, n1);
+    if(!ok2){ notify("変更できませんでした","今のパスワードをご確認ください。"); return; }
+    ["pinCur","pinNew","pinNew2"].forEach(id=>{ const e=$(id); if(e) e.value=""; });
+    notify("パスワードを変更しました","次回からは新しいパスワードで開いてください。");
+    return;
+  }
   try{
     const ch=await pinHash(cur);
     if(!c.pinHash || ch!==c.pinHash){ notify("今の暗証番号が違います",""); return; }
@@ -2797,9 +2884,15 @@ $("btnSavePost").onclick=async()=>{
 };
 async function wipeDate(date){
   if(admCurDay&&admCurDay.date===date) admCurDay.shifts.forEach(sh=>markGone(keyOf(sh)));
-  for(const node of ["jet_scan","jet_scan_nos","jet_photos"]){
+  // ★ 2026/09/12: 顧客別の階層と旧形式の両方を消す
+  const _cidW=admCustId||S.custId||"";
+  for(const node of ["jet_scan","jet_scan_nos"]){
+    if(_cidW){
+      try{ await fbFetch(FB_URL+"/nikki/"+node+"/"+encodeURIComponent(_cidW)+"/"+date+".json",{method:"DELETE"}); }catch(e){}
+    }
     try{ await fbFetch(FB_URL+"/nikki/"+node+"/"+date+".json",{method:"DELETE"}); }catch(e){}
   }
+  try{ await fbFetch(FB_URL+"/nikki/jet_photos/"+date+".json",{method:"DELETE"}); }catch(e){}
   if(date===S.date){ S=blank(); seenIdx=null; save(); }
   else { admArchive=readArchive().filter(d=>d.date!==date); writeArchive(admArchive); }
 }
