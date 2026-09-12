@@ -1427,8 +1427,14 @@ $("btnStart").onclick=()=>{
   const list=custsForId($("sId")?.value);
   let custId=String($("sCust")?.value || (list.length===1?list[0].id:"") || S.custId || "");
   if(!custId){ notify("顧客が未選択です","どの顧客の集荷かを選んでください。"); return; }
-  const cust=jetCustById(custId);
+  // ★ 2026/09/12: マスタのキーに頼らず、選択中の一覧から引き当てる。
+  //   Firebase は数値のキーを配列に変換することがあり、キーと id がずれる場合がある。
+  const cust = list.find(c=>String(c.id)===String(custId))
+            || jetCustList().find(c=>String(c.id)===String(custId))
+            || jetCustById(custId)
+            || (list.length===1 ? list[0] : null);
   if(!cust){ notify("顧客が不明です","経営管理で登録された顧客を選んでください。"); return; }
+  custId=String(cust.id);
   const id=normId($("sId").value);
   if(!id){ notify("IDが未入力です","社員番号を入力してください。"); return; }
   const drv=$("sDrv").value.trim();
@@ -2110,7 +2116,12 @@ const JETCUSTS_LS = "jscan_jet_customers";
 function jetCustList(){
   return Object.values(JETCUSTS||{}).filter(c=>c && c.active!==false);
 }
-function jetCustById(id){ return (JETCUSTS||{})[String(id)] || null; }
+function jetCustById(id){
+  const direct=(JETCUSTS||{})[String(id)];
+  if(direct) return direct;
+  // ★ 2026/09/12: キーと id がずれる場合があるので id でも探す
+  return Object.values(JETCUSTS||{}).find(c=>c && String(c.id)===String(id)) || null;
+}
 function jetCustBySlug(slug){
   return jetCustList().find(c=>String(c.slug||"")===String(slug||"")) || null;
 }
@@ -2260,7 +2271,7 @@ function applyCustMode(){
   const h=document.querySelector("#vStart h1");
   if(h){
     const c=jetCustBySlug(CUST_SLUG);
-    h.textContent=(c&&c.name?c.name:"お客様")+" 専用ページ";
+    h.textContent=(c&&c.name)?(c.name+"　専用ページ"):"お客様 専用ページ";
   }
   const adm=$("btnAdmin"); if(adm) adm.textContent="集荷状況を見る";
 }
@@ -2439,11 +2450,12 @@ function openAdmin(){
   if(pinBox) pinBox.className=_custOnly?"":"hide";
   const _dis=$("admDisclaimer"); if(_dis) _dis.className="note"+(_custOnly?"":" hide");
   const _fav=$("admFavNote");    if(_fav) _fav.className="note"+(_custOnly?"":" hide");
-  // ヘッダーに顧客名を出す
+  // ★ 2026/09/12: ヘッダーに顧客名を併記する（誰の画面か分かるように）。
+  //   社内用で顧客を切り替えたときも、選んでいる顧客名を出す。
   const _t=$("admTitle");
   if(_t){
-    const _c=jetCustById(admCustId);
-    _t.textContent=(_custOnly&&_c&&_c.name)?_c.name:"管理画面";
+    const _c=jetCustById(admCustId) || (isCustMode()?jetCustBySlug(CUST_SLUG):null);
+    _t.textContent=(_c&&_c.name)?(_c.name+"　管理画面"):"管理画面";
   }
   paintAdmCust();
   // ★ 2026/09/12: 見ている顧客の差出先を出す
