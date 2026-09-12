@@ -256,6 +256,11 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <div id="vStart">
   <div class="panel">
     <h1>集荷を始める</h1>
+    <!-- ★ 2026/09/12: 多顧客対応。どの顧客の計数かを最初に選ぶ。
+         経営管理の「計数を行う顧客」に登録された顧客だけが並ぶ。 -->
+    <div class="field" id="sCustField"><label for="sCust">顧客</label>
+      <select id="sCust"></select>
+      <div class="note" id="sCustMsg" style="margin-top:4px"></div></div>
     <div class="field"><label for="sId">ID</label><input id="sId" type="tel" inputmode="numeric" autocomplete="off">
       <div class="note" id="sIdMsg" style="margin-top:4px"></div></div>
     <div class="field"><label for="sBin">便名</label><input id="sBin" type="text" placeholder="第1便"></div>
@@ -429,6 +434,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <span class="ttl">管理画面</span>
     <button class="btn sm dim" id="btnAdmLogout">ログアウト</button>
   </div>
+  <!-- ★ 2026/09/12: 見ている顧客。社内用で開いた場合は切り替えられる。 -->
+  <div class="field" id="admCustField"><label for="admCust">顧客</label>
+    <select id="admCust"></select></div>
   <div class="field"><label for="admDate">日付</label>
     <input id="admDate" type="date" style="padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF">
     <p class="note" id="admDateNote"></p></div>
@@ -436,6 +444,19 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <h3>便の一覧</h3>
   <div id="admList"></div>
   <button class="btn wide danger hide" id="btnDelPicked">選択した便を削除する</button>
+
+  <!-- ★ 2026/09/12: 顧客用URLで開いた場合のみ表示。顧客自身が暗証番号を変更できる。 -->
+  <div id="admPinBox" class="hide">
+    <h3>暗証番号の変更</h3>
+    <div class="field"><label for="pinCur">今の暗証番号</label>
+      <input id="pinCur" type="password" inputmode="numeric" autocomplete="off"></div>
+    <div class="field"><label for="pinNew">新しい暗証番号（4〜8桁）</label>
+      <input id="pinNew" type="password" inputmode="numeric" autocomplete="off"></div>
+    <div class="field"><label for="pinNew2">新しい暗証番号（確認）</label>
+      <input id="pinNew2" type="password" inputmode="numeric" autocomplete="off"></div>
+    <button class="btn wide" id="btnPinChange">暗証番号を変更する</button>
+    <p class="note">変更すると、次回からは新しい番号で開いてください。番号を忘れた場合は大阪急配へご連絡ください。</p>
+  </div>
 
   <h3>提出用（お客様へ渡す）</h3>
   <button class="btn wide" id="btnSubDay">この日の全便を書き出す（1ファイル）</button>
@@ -838,6 +859,15 @@ const DEVKEY="jet-device-id";
 let DEVICE=localStorage.getItem(DEVKEY);
 if(!DEVICE){ DEVICE="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6); localStorage.setItem(DEVKEY,DEVICE); }
 const shiftKey=sh=>DEVICE+"_"+sh.id;
+/* ★ 2026/09/12: 多顧客対応で計数データを顧客ごとの階層に分ける。
+     新: nikki/jet_scan/<顧客ID>/<日付>/<便キー>
+     旧: nikki/jet_scan/<日付>/<便キー>       ← ジェット1社時代のデータ
+   顧客用の管理画面が自社の便だけを読めるようにするため、jet_scan だけ階層を分ける。
+   番号明細(jet_scan_nos)と写真(jet_photos)は便キーが端末ID込みで一意なので、
+   便単位で読めば他社のものは混ざらない。階層は分けない。 */
+const jetScanPath=(custId,date,key)=>
+  "/nikki/jet_scan/"+encodeURIComponent(String(custId||"_legacy"))+"/"+date+(key?("/"+key):"");
+const shCustId=sh=>String((sh&&sh.custId)||S.custId||"_legacy");
 const keyOf=sh=>sh._key||shiftKey(sh);
 // 同じドライバー（IDが同じ。IDが無ければ氏名）の便を数える
 function sameDriver(sh,id,name){
@@ -876,7 +906,7 @@ async function syncNow(){
   for(const sh of list){
     const stamp=sh._dirty;
     try{
-      const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+S.date+"/"+shiftKey(sh)+".json",
+      const r=await fbFetch(FB_URL+jetScanPath(shCustId(sh),S.date,shiftKey(sh))+".json",
         {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(shiftPayload(S,sh))});
       if(!r.ok) continue;
       sh._synced=stamp;
@@ -1276,14 +1306,22 @@ $("btnFinish").onclick=()=>{
     }});
 };
 $("btnStart").onclick=()=>{
+  // ★ 2026/09/12: どの顧客の計数かを先に確定する。便ごとに顧客を持たせる。
+  const list=jetCustList();
+  let custId=String($("sCust")?.value || S.custId || (list.length===1?list[0].id:""));
+  if(!custId){ notify("顧客が未選択です","どの顧客の集荷かを選んでください。"); return; }
+  const cust=jetCustById(custId);
+  if(!cust){ notify("顧客が不明です","経営管理で登録された顧客を選んでください。"); return; }
   const id=normId($("sId").value);
   if(!id){ notify("IDが未入力です","社員番号を入力してください。"); return; }
   const drv=$("sDrv").value.trim();
   if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
   const binIn=$("sBin").value.trim();
+  S.custId=custId; S.custName=cust.name||"";
   S.shifts.push({id:Date.now(),bin:isAutoBin(binIn)?nextBinFor(id,drv):tidyBin(binIn),
     driver:drv,tel:$("sTel").value.trim(),driverId:canonId(id),corp:corpFromId(id),
     registered:idState.kind==="driver",
+    custId:custId, custName:cust.name||"",
     startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
   S.active=S.shifts.length-1; save();
   markDirty(cur());
@@ -1660,7 +1698,7 @@ async function crossCheck(sh){
   const out=[];
   try{
     const [sr,nr]=await Promise.all([
-      fbFetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"),
+      fbFetch(FB_URL+jetScanPath(S.custId,S.date)+".json"),
       fbFetch(FB_URL+"/nikki/jet_scan_nos/"+S.date+".json")
     ]);
     const sum=(await sr.json())||{}, nos=(await nr.json())||{};
@@ -1762,7 +1800,7 @@ function isGone(k){
 }
 async function fbDeleteShift(day,sh){
   markGone(keyOf(sh));
-  try{ await fbFetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
+  try{ await fbFetch(FB_URL+jetScanPath(shCustId(sh),day.date,keyOf(sh))+".json",{method:"DELETE"}); }catch(e){}
   try{ await fbFetch(FB_URL+"/nikki/jet_scan_nos/"+day.date+"/"+keyOf(sh)+".json",{method:"DELETE"}); }catch(e){}
 }
 $("btnCancelShift").onclick=()=>{
@@ -1786,7 +1824,7 @@ let dayAll=[], dayAllAt=0, dayAllRemote=false;
 async function fetchDayAll(){
   const map=new Map();
   try{
-    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+S.date+".json"); const v=await r.json();
+    const r=await fbFetch(FB_URL+jetScanPath(S.custId,S.date)+".json"); const v=await r.json();
     if(v&&typeof v==="object"){
       Object.values(v).forEach(j=>{ if(!j||!j.key||isGone(j.key)) return;
         map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
@@ -1947,6 +1985,45 @@ const normId=id=>String(id||"").replace(/[０-９]/g,c=>String.fromCharCode(c.ch
 //       const d = await crypto.subtle.digest('SHA-256', b);
 //       return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,'0')).join('');
 //     })('新しい番号')
+/* ---------- ★ 2026/09/12: 計数顧客マスタ（nikki/jet_customers） ----------
+   経営管理で登録した顧客の一覧。開始画面の選択と、顧客用の管理画面で使う。
+   形: { <顧客ID>: { id, name, slug, pinHash, active } } */
+let JETCUSTS = {};
+const JETCUSTS_LS = "jscan_jet_customers";
+function jetCustList(){
+  return Object.values(JETCUSTS||{}).filter(c=>c && c.active!==false);
+}
+function jetCustById(id){ return (JETCUSTS||{})[String(id)] || null; }
+function jetCustBySlug(slug){
+  return jetCustList().find(c=>String(c.slug||"")===String(slug||"")) || null;
+}
+async function loadJetCusts(){
+  try{
+    const r = await fbFetch(FB_URL+"/nikki/jet_customers.json");
+    const v = await r.json();
+    if(v && typeof v==="object"){
+      JETCUSTS = v;
+      try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(v)); }catch(e){}
+    }
+  }catch(e){
+    // 通信できないときは端末に残っている一覧で動かす
+    try{ JETCUSTS = JSON.parse(localStorage.getItem(JETCUSTS_LS)||"{}") || {}; }catch(e2){ JETCUSTS={}; }
+  }
+}
+// 顧客選択を描画する。1社だけならそれを既定で選ぶ。
+function paintCustSelect(){
+  const sel = $("sCust");
+  if(!sel) return;
+  const list = jetCustList();
+  const cur = S.custId || (list.length===1 ? list[0].id : "");
+  sel.innerHTML = (list.length!==1 ? '<option value="">（顧客を選択）</option>' : '')
+    + list.map(c=>`<option value="${c.id}"${String(cur)===String(c.id)?" selected":""}>${c.name||("顧客"+c.id)}</option>`).join("");
+  const msg = $("sCustMsg");
+  if(msg) msg.textContent = list.length ? "" : "顧客が登録されていません。経営管理で登録してください。";
+  const fld = $("sCustField");
+  if(fld) fld.style.display = (list.length<=1 && S.custId) ? "none" : "";
+}
+
 const PIN_SALT   = "osq-jscan-pin-v1";
 const PIN_STAFF_H  = "38d62f159f1b3d7f01f262d87a5c9b210342bb074e2dde369a3de48746f20283";  // 大阪急配（社内）
 const PIN_CLIENT_H = "4777b718813fd452e161b374421486d85c12473356efab6f9265b2412ca5de4c";  // お客様（閲覧・提出用CSVのみ）
@@ -1956,11 +2033,47 @@ async function pinHash(p){
   return Array.from(new Uint8Array(d)).map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 let adminOK=false, isStaff=false, admArchive=[], admDate=null;
+// ★ 2026/09/12: 管理画面で見る顧客。顧客用URL(?c=slug)なら固定され、
+//   社内用の暗証番号で開いた場合は選択できる。
+let admCustId=null;
+
+/* ★ 2026/09/12: 顧客用URL( ?c=<slug> )の扱い。
+   このファイルの末尾でクエリを消しているため、先に控えて端末にも残す。
+   ホーム画面に追加した場合も顧客が固定されたままになる。 */
+const CUSTSLUG_LS = "jscan_cust_slug";
+let CUST_SLUG = "";
+(function(){
+  try{
+    const p = new URLSearchParams(location.search).get("c");
+    if(p){ CUST_SLUG = p; try{ localStorage.setItem(CUSTSLUG_LS, p); }catch(e){} }
+    else { CUST_SLUG = localStorage.getItem(CUSTSLUG_LS) || ""; }
+  }catch(e){ CUST_SLUG = ""; }
+})();
+const isCustMode = () => !!CUST_SLUG;
+
+// 顧客用モードでは計数の操作を出さない（閲覧とCSVだけ）
+function applyCustMode(){
+  if(!isCustMode()) return;
+  ["btnStart","btnOther","btnPhoto","btnResume","btnFinish","btnSumFromStart"]
+    .forEach(id=>{ const e=$(id); if(e) e.className=(e.className||"").replace(/\bhide\b/g,"")+" hide"; });
+  const card=$("sCustField"); if(card) card.style.display="none";
+  ["sId","sBin","sDrv","sTel"].forEach(id=>{
+    const e=$(id); if(e&&e.closest(".field")) e.closest(".field").style.display="none";
+  });
+  const h=document.querySelector("#vStart h1");
+  if(h){
+    const c=jetCustBySlug(CUST_SLUG);
+    h.textContent=(c&&c.name?c.name:"お客様")+" 専用ページ";
+  }
+  const adm=$("btnAdmin"); if(adm) adm.textContent="集荷状況を見る";
+}
 
 let admRemoteDates=[], admCurDay=null;
 async function fetchRemoteDates(){
   try{
-    const r=await fbFetch(FB_URL+"/nikki/jet_scan.json?shallow=true");
+    // ★ 2026/09/12: 顧客ごとの階層になったので、対象顧客の配下から日付を拾う。
+    const cid=admCustId||S.custId||"_legacy";
+    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+encodeURIComponent(cid)+".json?shallow=true");
     const v=await r.json();
     admRemoteDates=v?Object.keys(v).filter(d=>/^\d{4}-\d{2}-\d{2}$/.test(d)):[];
   }catch(e){}
@@ -1968,7 +2081,8 @@ async function fetchRemoteDates(){
 async function fetchDayMerged(date){
   const map=new Map();
   try{
-    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+date+".json"); const v=await r.json();
+    const cid=admCustId||S.custId||"_legacy";
+    const r=await fbFetch(FB_URL+"/nikki/jet_scan/"+encodeURIComponent(cid)+"/"+date+".json"); const v=await r.json();
     if(v&&typeof v==="object") Object.values(v).forEach(j=>{
       if(!j||!j.key||isGone(j.key)) return;
       map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",tel:j.tel||"",corp:j.corp||"",
@@ -2028,7 +2142,7 @@ function markExported(day,shifts){
   shifts.forEach(sh=>{
     sh.exportedAt=now;
     if(sh._remote){
-      fbFetch(FB_URL+"/nikki/jet_scan/"+day.date+"/"+sh._key+".json",
+      fbFetch(FB_URL+jetScanPath(sh.custId||admCustId||S.custId,day.date,sh._key)+".json",
         {method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({exportedAt:now})}).catch(()=>{});
     }else if(day.date===S.date){ sh._dirty=now; }
   });
@@ -2047,21 +2161,50 @@ $("btnAdmin").onclick=()=>{
   if(!adminOK){
     ask({title:"管理画面",body:"暗証番号を入力してください。",input:true,okText:"開く",
       onOk:async v=>{
-        // ★ 2026/09/12: ハッシュで照合する
+        // ★ 2026/09/12: ハッシュで照合する。
+        //   社内用の番号なら全顧客を見られる。顧客用URLで開いている場合は、
+        //   その顧客に設定された番号でも開ける（見えるのはその顧客の分だけ）。
         const t=String(v).trim();
         let h="";
         try{ h=await pinHash(t); }
         catch(e){ notify("照合できませんでした",""); return; }
-        if(h===PIN_STAFF_H){ isStaff=true; }
-        else if(h===PIN_CLIENT_H){ isStaff=false; }
-        else { notify("暗証番号が違います",""); return; }
+        await loadJetCusts();
+        const target = isCustMode() ? jetCustBySlug(CUST_SLUG) : null;
+        if(h===PIN_STAFF_H){
+          isStaff=true;
+          admCustId = admCustId || (target && target.id) || S.custId || null;
+        } else if(target && target.pinHash && h===target.pinHash){
+          isStaff=false; admCustId=String(target.id);
+        } else if(!isCustMode() && h===PIN_CLIENT_H){
+          // 旧: 単一の顧客用番号（ジェット1社時代）。顧客マスタ移行までの互換。
+          isStaff=false; admCustId = admCustId || S.custId || null;
+        } else { notify("暗証番号が違います",""); return; }
         adminOK=true; openAdmin();
       }});
     return;
   }
   openAdmin();
 };
+function paintAdmCust(){
+  const sel=$("admCust"), fld=$("admCustField");
+  if(!sel||!fld) return;
+  const list=jetCustList();
+  // 顧客用URLで開いている場合は切り替えさせない
+  if(!isStaff || isCustMode() || list.length<=1){
+    const c=jetCustById(admCustId);
+    sel.innerHTML=`<option value="${admCustId||""}">${(c&&c.name)||"—"}</option>`;
+    sel.disabled=true;
+    fld.style.display=(c?"":"none");
+    return;
+  }
+  sel.disabled=false; fld.style.display="";
+  sel.innerHTML=list.map(c=>`<option value="${c.id}"${String(admCustId)===String(c.id)?" selected":""}>${c.name||("顧客"+c.id)}</option>`).join("");
+}
 function openAdmin(){
+  // ★ 2026/09/12: 暗証番号の変更は顧客用URLのときだけ出す
+  const pinBox=$("admPinBox");
+  if(pinBox) pinBox.className=(isCustMode()&&!isStaff)?"":"hide";
+  paintAdmCust();
   $("setPostName").value=SET.postName||""; $("setPostTel").value=SET.postTel||"";
   loadSettings(true).then(()=>{ if(!$("setPostName").value)$("setPostName").value=SET.postName||""; if(!$("setPostTel").value)$("setPostTel").value=SET.postTel||""; paintCall(); });
   fetchRemoteDates().then(updateDateNote);
@@ -2072,8 +2215,43 @@ function openAdmin(){
   updateDateNote();
   renderAdmin(); openSheet("shAdmin");
 }
+// ★ 2026/09/12: 社内用で開いたときの顧客切替
+const _admCustSel=$("admCust");
+if(_admCustSel) _admCustSel.onchange=function(){
+  admCustId=this.value||null;
+  admArchive=readArchive();
+  fetchRemoteDates().then(updateDateNote);
+  renderAdmin();
+};
 $("admDate").onchange=function(){ admDate=this.value||S.date; this.blur(); renderAdmin(); };
 $("admDate").addEventListener("click",function(){ try{ if(this.showPicker&&!("ontouchstart" in window)) this.showPicker(); }catch(e){} });
+// ★ 2026/09/12: 顧客自身による暗証番号の変更。
+//   保存するのはハッシュだけなので、番号そのものはどこにも残らない。
+const _btnPinChange=$("btnPinChange");
+if(_btnPinChange) _btnPinChange.onclick=async ()=>{
+  const cur=String($("pinCur")?.value||"").trim();
+  const n1 =String($("pinNew")?.value||"").trim();
+  const n2 =String($("pinNew2")?.value||"").trim();
+  const c=jetCustBySlug(CUST_SLUG);
+  if(!c){ notify("顧客が特定できません","大阪急配へご連絡ください。"); return; }
+  if(!/^\d{4,8}$/.test(n1)){ notify("新しい暗証番号を確認してください","4〜8桁の数字で入力してください。"); return; }
+  if(n1!==n2){ notify("新しい暗証番号が一致しません",""); return; }
+  if(/^(\d)\1+$/.test(n1)){ notify("その番号は使えません","同じ数字の繰り返しは避けてください。"); return; }
+  try{
+    const ch=await pinHash(cur);
+    if(!c.pinHash || ch!==c.pinHash){ notify("今の暗証番号が違います",""); return; }
+    const nh=await pinHash(n1);
+    const r=await fbFetch(FB_URL+"/nikki/jet_customers/"+encodeURIComponent(String(c.id))+"/pinHash.json",
+      {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(nh)});
+    if(!r.ok) throw new Error("status="+r.status);
+    c.pinHash=nh;
+    try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(JETCUSTS)); }catch(e){}
+    ["pinCur","pinNew","pinNew2"].forEach(id=>{ const e=$(id); if(e) e.value=""; });
+    notify("暗証番号を変更しました","次回からは新しい番号で開いてください。");
+  }catch(e){
+    notify("変更できませんでした","通信を確認してもう一度お試しください。");
+  }
+};
 $("btnAdmLogout").onclick=()=>{ adminOK=false; isStaff=false; closeSheets(); notify("ログアウトしました","次回は暗証番号の入力から始まります。"); };
 // 管理画面は操作が15分止まったら自動ログアウト（共用端末で開きっぱなし対策）
 let admLast=Date.now();
@@ -2546,6 +2724,13 @@ wake();
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") wake(); });
 window.addEventListener("beforeunload",save);
 
+// ★ 2026/09/12: 顧客マスタを読み込んでから画面を整える
+loadJetCusts().then(()=>{
+  try{ paintCustSelect(); }catch(e){}
+  try{ applyCustMode(); }catch(e){}
+  // 顧客用URLで開いた場合は、そのまま暗証番号の入力へ進む
+  if(isCustMode() && !adminOK){ try{ $("btnAdmin").click(); }catch(e){} }
+});
 showView(); render(); scheduleSync(1500);
 try{ if(location.search&&history.replaceState) history.replaceState(null,"",location.pathname); }catch(e){}
 </script>
