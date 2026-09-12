@@ -283,6 +283,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 <div id="vScan" class="hide" style="display:flex;flex-direction:column;flex:1;min-height:0">
   <header>
     <div class="binfo">
+      <!-- ★ 2026/09/12: どの顧客の計数か分かるように顧客名を出す -->
+      <div class="bsub" id="hCust" style="font-weight:700;color:var(--blue)"></div>
       <div class="bname" id="hBin">第1便</div>
       <div class="bsub" id="hSub"></div>
     </div>
@@ -1365,6 +1367,8 @@ function showView(){
 }
 function openShiftIdx(){ return S.shifts.findIndex(sh=>!sh.closed); }
 function prepStart(){
+  // ★ 2026/09/12: 顧客の登録が増えている場合があるので、開始画面を出すたびに作り直す
+  try{ paintCustSelect(); }catch(e){}
   const oi=openShiftIdx();
   $("btnResume").className="btn wide"+(oi<0?" hide":"");
   if(oi>=0) $("btnResume").textContent=S.shifts[oi].bin+"（計数中）に戻る";
@@ -1425,7 +1429,16 @@ $("btnFinish").onclick=()=>{
 $("btnStart").onclick=()=>{
   // ★ 2026/09/12: どの顧客の計数かを先に確定する。便ごとに顧客を持たせる。
   const list=custsForId($("sId")?.value);
-  let custId=String($("sCust")?.value || (list.length===1?list[0].id:"") || S.custId || "");
+  const _sel=String($("sCust")?.value||"");
+  // ★ 2026/09/12: 候補が複数あるときは必ず選ばせる。
+  //   以前は未選択でも前回の顧客(S.custId)を黙って使っていたため、
+  //   違う顧客の集荷として記録されるおそれがあった。
+  if(list.length>1 && !_sel){
+    try{ paintCustSelect(); }catch(e){}
+    notify("顧客を選んでください","この日は複数の顧客が対象です。上の「顧客」から選んでください。");
+    return;
+  }
+  let custId=String(_sel || (list.length===1?list[0].id:"") || "");
   if(!custId){ notify("顧客が未選択です","どの顧客の集荷かを選んでください。"); return; }
   // ★ 2026/09/12: マスタのキーに頼らず、選択中の一覧から引き当てる。
   //   Firebase は数値のキーを配列に変換することがあり、キーと id がずれる場合がある。
@@ -1468,6 +1481,13 @@ function render(){
   $("c3").textContent=c3; $("c5").textContent=c5; $("ct").textContent=c3+c5;
   $("hBin").textContent=sh.bin;
   $("hSub").textContent=sh.driver+" / 開始 "+hhmm(sh.startedAt)+" / "+sh.scans.length+"件";
+  // ★ 2026/09/12: 顧客名（便に記録されたものを優先）
+  const _hc=$("hCust");
+  if(_hc){
+    const _cn=sh.custName || (jetCustById(sh.custId||S.custId)||{}).name || "";
+    _hc.textContent=_cn;
+    _hc.style.display=_cn?"":"none";
+  }
   paintCall(); paintSync(); paintLastRead(); paintCarrier();
   $("m3").className="mode"+(mode3?" on3":"");
   $("m5").className="mode"+(mode3?"":" on5");
