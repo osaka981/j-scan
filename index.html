@@ -464,13 +464,18 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <button class="btn wide" id="btnSubNew">未書き出しの便だけ書き出す</button>
   <p class="note">列は 日付・便・ドライバー・サイズ・番号・読取時刻 のみです。便ごとに書き出す場合は、上の一覧から便を開いてください。</p>
 
-  <div id="admInternal">
-    <h3>ドライバー画面の発信先（郵便局 大口窓口）</h3>
+  <!-- ★ 2026/09/12: 発信先は顧客ごとに異なるため、顧客単位の設定にした。
+       顧客用ページからも、弊社の管理ページからも編集できる。 -->
+  <div id="admPostBox">
+    <h3>差出先（郵便局 大口窓口）</h3>
+    <p class="note" id="setPostWho"></p>
     <div class="field"><label for="setPostName">名称</label><input id="setPostName" type="text" placeholder="大阪北郵便局 大口窓口"></div>
     <div class="field"><label for="setPostTel">電話番号</label><input id="setPostTel" type="tel" inputmode="tel" placeholder="06-0000-0000"></div>
-    <button class="btn wide" id="btnSavePost">発信先を保存する</button>
-    <p class="note" id="setPostMsg">保存すると全端末のドライバー画面に反映されます。</p>
+    <button class="btn wide" id="btnSavePost">差出先を保存する</button>
+    <p class="note" id="setPostMsg">この顧客の集荷を担当するドライバーの画面に反映されます。</p>
+  </div>
 
+  <div id="admInternal">
     <h3>選択した日のデータ</h3>
     <button class="btn wide danger" id="btnWipeToday">この日のデータを全消去する</button>
     <p class="note">テストで作った便を片付けるためのものです。上で選んだ日の便・読取・記録・写真が、全端末分すべて消えます。</p>
@@ -738,6 +743,31 @@ async function loadSettings(){
   }catch(e){}
   paintCall();
 }
+/* ★ 2026/09/12: 発信先は顧客ごと（jet_customers/<id>/postName・postTel）。
+   顧客に設定が無い場合は、従来の共通設定（jet_settings）を使う。 */
+function postOf(custId){
+  const c = jetCustById(custId || S.custId);
+  const nm = (c && c.postName) || SET.postName || "";
+  const tel= (c && c.postTel ) || SET.postTel  || "";
+  return { name:nm, tel:tel, fromCust: !!(c && (c.postName||c.postTel)) };
+}
+async function savePostFor(custId, name, tel){
+  const cid = String(custId||"").trim();
+  if(!cid){
+    // 顧客が特定できない場合は従来の共通設定に保存する
+    return await saveSettings({postName:name, postTel:tel});
+  }
+  try{
+    for(const [k,v] of [["postName",name],["postTel",tel]]){
+      const r=await fbFetch(FB_URL+"/nikki/jet_customers/"+encodeURIComponent(cid)+"/"+k+".json",
+        {method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(v)});
+      if(!r.ok) return false;
+    }
+    if(JETCUSTS[cid]){ JETCUSTS[cid].postName=name; JETCUSTS[cid].postTel=tel; }
+    try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(JETCUSTS)); }catch(e){}
+    return true;
+  }catch(e){ return false; }
+}
 async function saveSettings(patch){
   Object.assign(SET,patch); localStorage.setItem(SETKEY,JSON.stringify(SET));
   try{
@@ -752,12 +782,13 @@ async function saveSettings(patch){
 }
 function paintCall(){
   const b=$("btnCall"); if(!b) return;
-  b.disabled=!(SET.postTel||"").trim();
-  b.title=SET.postName?SET.postName+"へ発信":"郵便局へ発信";
+  const p=postOf();                     // ★ 2026/09/12: 顧客ごとの発信先
+  b.disabled=!(p.tel||"").trim();
+  b.title=p.name?p.name+"へ発信":"郵便局へ発信";
   const n=$("postNote");
   if(n){
-    const tel=(SET.postTel||"").trim();
-    n.textContent=tel?("発信先："+(SET.postName||"郵便局")+"　"+tel):"発信先が未設定です（管理画面で設定してください）";
+    const tel=(p.tel||"").trim();
+    n.textContent=tel?("発信先："+(p.name||"郵便局")+"　"+tel):"発信先が未設定です（管理画面で設定してください）";
     n.style.color=tel?"#4A5B6B":"#A8231C";
   }
 }
@@ -1322,10 +1353,16 @@ $("btnFinish").onclick=()=>{
       notify("業務終了を記録しました",name+"　"+hhmm(S.ends[S.ends.length-1].ts)+"\n続けて稼働する場合は、そのまま次の便を始められます。");
     }});
 };
+// ★ 2026/09/12: IDを入れ替えたら、担当する顧客の一覧を作り直す
+["input","change","blur"].forEach(ev=>{
+  const el=$("sId");
+  if(el) el.addEventListener(ev,()=>{ try{ paintCustSelect(); }catch(e){} });
+});
+
 $("btnStart").onclick=()=>{
   // ★ 2026/09/12: どの顧客の計数かを先に確定する。便ごとに顧客を持たせる。
-  const list=jetCustList();
-  let custId=String($("sCust")?.value || S.custId || (list.length===1?list[0].id:""));
+  const list=custsForId($("sId")?.value);
+  let custId=String($("sCust")?.value || (list.length===1?list[0].id:"") || S.custId || "");
   if(!custId){ notify("顧客が未選択です","どの顧客の集荷かを選んでください。"); return; }
   const cust=jetCustById(custId);
   if(!cust){ notify("顧客が不明です","経営管理で登録された顧客を選んでください。"); return; }
@@ -1444,16 +1481,16 @@ $("btnDelAll").onclick=()=>{
   }
 };
 function callPost(){
-  const t=(SET.postTel||"").trim();
+  const t=(postOf().tel||"").trim();
   if(!t){ notify("発信先が未設定です","管理画面（社内）で郵便局の電話番号を設定してください。"); return; }
-  ask({title:(SET.postName||"郵便局")+" へ発信します",body:t,okText:"発信する",
+  ask({title:(postOf().name||"郵便局")+" へ発信します",body:t,okText:"発信する",
     onOk:()=>{ location.href="tel:"+t.replace(/[^0-9+]/g,""); }});
 }
 $("btnCallSum").onclick=callPost;
 $("btnCall").onclick=()=>{
-  const t=(SET.postTel||"").trim();
+  const t=(postOf().tel||"").trim();
   if(!t){ notify("発信先が未設定です","管理画面（社内）で郵便局の電話番号を設定してください。"); return; }
-  ask({title:(SET.postName||"郵便局")+" へ発信します",body:t,okText:"発信する",
+  ask({title:(postOf().name||"郵便局")+" へ発信します",body:t,okText:"発信する",
     onOk:()=>{ location.href="tel:"+t.replace(/[^0-9+]/g,""); }});
 };
 
@@ -1738,8 +1775,8 @@ function finishAfterClose(sh,call){
   S.ends.push({driver:sh.driver,tel:sh.tel||"",ts:Date.now()});
   save();
   notify("業務終了を記録しました",sh.driver+"　"+hhmm(Date.now())+
-    ((SET.postTel||"").trim()&&call?"\n続けて発信します。":""));
-  if(call&&(SET.postTel||"").trim()) setTimeout(()=>{ location.href="tel:"+(SET.postTel||"").replace(/[^0-9+]/g,""); },600);
+    ((postOf().tel||"").trim()&&call?"\n続けて発信します。":""));
+  if(call&&(postOf().tel||"").trim()) setTimeout(()=>{ location.href="tel:"+(postOf().tel||"").replace(/[^0-9+]/g,""); },600);
 }
 function doClose(sh){
   sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0);
@@ -1758,11 +1795,11 @@ async function doCloseFlow(){
   const later=res.list.filter(d=>d.mineTs>=d.other.ts);   // こちらが後から読んだ分
   const earlier=res.list.filter(d=>d.mineTs<d.other.ts);
   const a=cnt(sh).a, b=cnt(sh).b;
-  const dest=(SET.postName||"").trim()||"郵便局";
+  const dest=(postOf().name||"").trim()||"郵便局";
   const car=carrierOf(sh);
   const carLine=(sh.carrierName&&sh.carrierName!==sh.driver)?"局へ運ぶ人　"+car.name+"（計数 "+sh.driver+"）\n":"";
   const base=(a2,b2)=>carLine+"3cm "+a2+"個　5cm "+b2+"個　計 "+(a2+b2)+"個\n締め時刻 "+hhmm(Date.now())+
-         "\n\n"+dest+"に電話を入れてから向かってください。"+((SET.postTel||"").trim()?"\n"+SET.postTel:"")+
+         "\n\n"+dest+"に電話を入れてから向かってください。"+((postOf().tel||"").trim()?"\n"+postOf().tel:"")+
          "\n締めた後の画面にある「局へ発信」から掛けられます。";
 
   if(later.length){
@@ -1794,7 +1831,7 @@ async function doCloseFlow(){
       okText:"締める",onOk:()=>doClose(sh)});
     return;
   }
-  const tel=(SET.postTel||"").trim();
+  const tel=(postOf().tel||"").trim();
   ask({title:sh.bin+"（"+sh.driver+"）を締めます",
     body:(res.ok?"":"※通信できないため、他のドライバーとの重複は確認できていません。\n\n")+base(a,b),
     okText:tel?"締めて発信する":"締める",
@@ -1860,7 +1897,7 @@ function openSummary(){
   dayAll=S.shifts.slice(); dayAllRemote=false; paintSummary();
 }
 function paintSummary(){
-  $("btnCallSum").textContent=(SET.postName||"郵便局")+"へ発信"; $("btnCallSum").disabled=!(SET.postTel||"").trim();
+  $("btnCallSum").textContent=(postOf().name||"郵便局")+"へ発信"; $("btnCallSum").disabled=!(postOf().tel||"").trim();
   $("btnCancelShift").className="btn wide danger"+(inScan()?"":" hide");
   $("cancelNote").className="note"+(inScan()?"":" hide");
   const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
@@ -2027,18 +2064,56 @@ async function loadJetCusts(){
     try{ JETCUSTS = JSON.parse(localStorage.getItem(JETCUSTS_LS)||"{}") || {}; }catch(e2){ JETCUSTS={}; }
   }
 }
-// 顧客選択を描画する。1社だけならそれを既定で選ぶ。
+/* ★ 2026/09/12: 顧客名の取り扱い。
+   顧客が増えたとき、開始画面に全顧客名が並ぶと、委託先のドライバーにも
+   他社の取引先名が見えてしまう。IDを入れると所属企業が決まるので、
+   その企業が担当する顧客だけを出す。
+   担当は経営管理の計数顧客マスタで設定する（corps: ["1","2"] など。
+   1=大阪急配 2=株式会社UP 9=その他。未設定の顧客は全員に出す）。
+   IDが未入力のうちは顧客名を一切出さない。 */
+function custsForId(id){
+  const list = jetCustList();
+  const t = String(id||"").trim();
+  if(!t) return [];
+  const corp = corpFromId(t);                      // "1" / "2" / "9"
+  const cid  = canonId(t);
+  return list.filter(c=>{
+    const corps = Array.isArray(c.corps) ? c.corps.map(String) : null;
+    const drvs  = Array.isArray(c.driverIds) ? c.driverIds.map(String) : null;
+    if(drvs && drvs.indexOf(String(cid))>=0) return true;   // 個別指定があれば優先
+    if(!corps || !corps.length) return true;                // 未設定なら制限しない
+    return corps.indexOf(String(corp))>=0;
+  });
+}
+// 顧客選択を描画する。IDを入れるまでは出さない。該当が1社ならそれで確定する。
 function paintCustSelect(){
   const sel = $("sCust");
   if(!sel) return;
-  const list = jetCustList();
-  const cur = S.custId || (list.length===1 ? list[0].id : "");
+  const id   = $("sId") ? $("sId").value : "";
+  const list = custsForId(id);
+  const fld  = $("sCustField");
+  const msg  = $("sCustMsg");
+  if(!String(id||"").trim()){
+    // IDが未入力の間は顧客名を出さない
+    sel.innerHTML = '<option value="">—</option>';
+    if(fld) fld.style.display = "none";
+    if(msg) msg.textContent = "";
+    return;
+  }
+  if(!list.length){
+    sel.innerHTML = '<option value="">—</option>';
+    if(fld) fld.style.display = "";
+    if(msg) msg.textContent = jetCustList().length
+      ? "このIDで計数できる顧客がありません。大阪急配へご連絡ください。"
+      : "顧客が登録されていません。経営管理で登録してください。";
+    return;
+  }
+  const cur = list.some(c=>String(c.id)===String(S.custId)) ? S.custId : (list.length===1 ? list[0].id : "");
   sel.innerHTML = (list.length!==1 ? '<option value="">（顧客を選択）</option>' : '')
     + list.map(c=>`<option value="${c.id}"${String(cur)===String(c.id)?" selected":""}>${c.name||("顧客"+c.id)}</option>`).join("");
-  const msg = $("sCustMsg");
-  if(msg) msg.textContent = list.length ? "" : "顧客が登録されていません。経営管理で登録してください。";
-  const fld = $("sCustField");
-  if(fld) fld.style.display = (list.length<=1 && S.custId) ? "none" : "";
+  if(msg) msg.textContent = "";
+  // 該当が1社だけなら選ぶ必要がないので隠す
+  if(fld) fld.style.display = (list.length===1) ? "none" : "";
 }
 
 const PIN_SALT   = "osq-jscan-pin-v1";
@@ -2233,8 +2308,20 @@ function openAdmin(){
   const pinBox=$("admPinBox");
   if(pinBox) pinBox.className=(isCustMode()&&!isStaff)?"":"hide";
   paintAdmCust();
-  $("setPostName").value=SET.postName||""; $("setPostTel").value=SET.postTel||"";
-  loadSettings(true).then(()=>{ if(!$("setPostName").value)$("setPostName").value=SET.postName||""; if(!$("setPostTel").value)$("setPostTel").value=SET.postTel||""; paintCall(); });
+  // ★ 2026/09/12: 見ている顧客の差出先を出す
+  const _p0=postOf(admCustId||S.custId);
+  $("setPostName").value=_p0.name||""; $("setPostTel").value=_p0.tel||"";
+  const _who=$("setPostWho");
+  if(_who){
+    const _c=jetCustById(admCustId||S.custId);
+    _who.textContent=_c?(_c.name+" の差出先"):"共通の差出先（顧客が特定できないため）";
+  }
+  loadSettings(true).then(()=>{
+    const _p=postOf(admCustId||S.custId);
+    if(!$("setPostName").value)$("setPostName").value=_p.name||"";
+    if(!$("setPostTel").value)$("setPostTel").value=_p.tel||"";
+    paintCall();
+  });
   fetchRemoteDates().then(updateDateNote);
   admArchive=readArchive();
   const days=Array.from(new Set(admArchive.map(d=>d.date).filter(d=>d!==S.date))).concat([S.date]).reverse();
@@ -2696,12 +2783,16 @@ $("btnExpDay").onclick=()=>{
   download("jet_"+day.date+".csv",CSVHEAD+csvBody(day,day.shifts,true));
   markExported(day,day.shifts);
 };
+// ★ 2026/09/12: 差出先は顧客ごと。顧客用ページからも、弊社の管理ページからも保存できる。
 $("btnSavePost").onclick=async()=>{
-  if(!isStaff) return;
+  const cid=String(admCustId||S.custId||"");
   const name=$("setPostName").value.trim(), tel=$("setPostTel").value.trim();
-  const ok=await saveSettings({postName:name,postTel:tel});
-  $("setPostMsg").textContent=ok?"保存しました（全端末に反映されます）":"端末には保存しましたが、共有への保存に失敗しました。電波を確認して再度保存してください";
-  $("setPostMsg").style.color=ok?"#1D6B45":"#A8231C";
+  const ok=await savePostFor(cid,name,tel);
+  const msg=$("setPostMsg");
+  msg.textContent=ok
+    ? (cid?"保存しました（この顧客の集荷を担当するドライバーの画面に反映されます）":"保存しました（全端末に反映されます）")
+    : "保存に失敗しました。電波を確認して再度保存してください";
+  msg.style.color=ok?"#1D6B45":"#A8231C";
   paintCall();
 };
 async function wipeDate(date){
