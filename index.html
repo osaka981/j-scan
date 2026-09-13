@@ -930,7 +930,7 @@ const shiftKey=sh=>DEVICE+"_"+sh.id;
    ※ 顧客用ページでの分離は、階層化が終わるまで成立しない。 */
 // ★ 2026/09/13: 経営管理で旧データの移行が完了したら true にする。
 //   true にすると読み書きが jet_scan/<顧客ID>/<日付> になり、顧客ごとに分離される。
-const JET_USE_CUST_PATH = true;
+const JET_USE_CUST_PATH = false;
 const jetScanPath=(custId,date,key)=>{
   const c=String(custId||"").trim();
   const head = (JET_USE_CUST_PATH && c && c!=="_legacy") ? ("/"+encodeURIComponent(c)) : "";
@@ -2241,6 +2241,16 @@ let adminOK=false, isStaff=false, admArchive=[], admDate=null;
 // ★ 2026/09/12: 管理画面で見る顧客。顧客用URL(?c=slug)なら固定され、
 //   社内用の暗証番号で開いた場合は選択できる。
 let admCustId=null;
+/* ★ 2026/09/13: 管理画面で見る顧客を決める。
+   admCustId が未設定でも、登録が1社だけならそれを使う。
+   これが無いと、0981 や 1108 で開いたときに顧客が空のままになり、
+   顧客配下のデータを探せず「記録のある日」が端末の分しか出なかった。 */
+function effCustId(){
+  const v = admCustId || S.custId || "";
+  if(v) return String(v);
+  const list = (typeof jetCustList==="function") ? jetCustList() : [];
+  return list.length===1 ? String(list[0].id) : "";
+}
 
 /* ★ 2026/09/12: 顧客用URL( ?c=<slug> )の扱い。
    このファイルの末尾でクエリを消しているため、先に控えて端末にも残す。
@@ -2319,7 +2329,8 @@ let admRemoteDates=[], admCurDay=null;
 async function fetchRemoteDates(){
   try{
     // ★ 2026/09/12: 顧客配下の日付と、旧形式（直下が日付）の両方から集める。
-    const cid=JET_USE_CUST_PATH ? (admCustId||S.custId||"") : "";
+    const cid=JET_USE_CUST_PATH ? effCustId() : "";
+    if(cid && !admCustId) admCustId=cid;   // 以降の読み込みでも同じ顧客を使う
     const set=new Set();
     if(cid){
       try{
@@ -2342,7 +2353,7 @@ async function fetchRemoteDates(){
 async function fetchDayMerged(date){
   const map=new Map();
   try{
-    const cid=admCustId||S.custId||"";
+    const cid=effCustId();
     const v=await fetchJetScan(cid,date);
     if(v&&typeof v==="object") Object.values(v).forEach(j=>{
       if(!j||!j.key||isGone(j.key)) return;
@@ -2364,7 +2375,7 @@ async function ensureScans(date,shifts){
   const need=shifts.filter(sh=>!Array.isArray(sh.scans));
   if(!need.length) return true;
   try{
-    const cidN=admCustId||S.custId||"";
+    const cidN=effCustId();
     const r={json:()=>fetchJetNos(cidN,date)};
     const v=(await r.json())||{};
     need.forEach(sh=>{
@@ -3012,7 +3023,7 @@ $("btnSavePost").onclick=async()=>{
 async function wipeDate(date){
   if(admCurDay&&admCurDay.date===date) admCurDay.shifts.forEach(sh=>markGone(keyOf(sh)));
   // ★ 2026/09/12: 顧客別の階層と旧形式の両方を消す
-  const _cidW=admCustId||S.custId||"";
+  const _cidW=effCustId();
   for(const node of ["jet_scan","jet_scan_nos"]){
     if(_cidW){
       try{ await fbFetch(FB_URL+"/nikki/"+node+"/"+encodeURIComponent(_cidW)+"/"+date+".json",{method:"DELETE"}); }catch(e){}
