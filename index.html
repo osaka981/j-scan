@@ -760,16 +760,23 @@ document.addEventListener("mousedown",unlockAudio,{once:true});
 const SETKEY="jet-settings-v1";
 let SET=(()=>{ try{ return JSON.parse(localStorage.getItem(SETKEY)||"{}"); }catch(e){ return {}; } })();
 async function loadSettings(){
-  try{
-    const r=await fbFetch(FB_URL+"/nikki/jet_settings.json"); const v=await r.json();
-    if(v&&typeof v==="object"){ SET=Object.assign({},SET,v); localStorage.setItem(SETKEY,JSON.stringify(SET)); }
-  }catch(e){}
-  paintCall();
+  // ★ 2026/09/13: 顧客アカウントは jet_settings を読めない（ルールで制限）。
+  //   読みに行くと401が出るだけなので、顧客用ページでは読まない。
+  //   発信先は顧客ごとの設定（jet_customers/<id>）から取る。
+  const _custMode = (typeof isCustMode==="function") ? isCustMode() : false;
+  if(!_custMode){
+    try{
+      const r=await fbFetch(FB_URL+"/nikki/jet_settings.json"); const v=await r.json();
+      if(v&&typeof v==="object"){ SET=Object.assign({},SET,v); localStorage.setItem(SETKEY,JSON.stringify(SET)); }
+    }catch(e){}
+  }
+  try{ paintCall(); }catch(e){}
 }
 /* ★ 2026/09/12: 発信先は顧客ごと（jet_customers/<id>/postName・postTel）。
    顧客に設定が無い場合は、従来の共通設定（jet_settings）を使う。 */
 function postOf(custId){
-  const c = jetCustById(custId || S.custId);
+  let c=null;
+  try{ c = jetCustById(custId || S.custId); }catch(e){ c=null; }
   const nm = (c && c.postName) || SET.postName || "";
   const tel= (c && c.postTel ) || SET.postTel  || "";
   return { name:nm, tel:tel, fromCust: !!(c && (c.postName||c.postTel)) };
@@ -943,6 +950,8 @@ const jetScanPath=(custId,date,key)=>{
    旧形式は、顧客が特定できないとき（社内用で顧客未選択など）だけ読む。 */
 async function fetchJetScan(custId,date,allowLegacy){
   const c=JET_USE_CUST_PATH ? String(custId||"").trim() : "";
+  // ★ 2026/09/13: 顧客が未確定のまま undefined を含むパスを読みに行かない
+  if(JET_USE_CUST_PATH && !c) return null;
   if(c){
     try{
       const r=await fbFetch(FB_URL+jetScanPath(c,date)+".json");
@@ -966,6 +975,7 @@ const jetNosPath=(custId,date,key)=>{
 // ★ 2026/09/12: 番号明細も同じ考え方（顧客指定時は旧形式を読まない）
 async function fetchJetNos(custId,date,allowLegacy){
   const c=JET_USE_CUST_PATH ? String(custId||"").trim() : "";
+  if(JET_USE_CUST_PATH && !c) return null;   // ★ 2026/09/13
   if(c){
     try{
       const r=await fbFetch(FB_URL+jetNosPath(c,date)+".json");
@@ -2156,6 +2166,10 @@ function jetCustList(){
   return Object.values(JETCUSTS||{}).filter(c=>c && c.active!==false);
 }
 function jetCustById(id){
+  // ★ 2026/09/13: 宣言前に呼ばれることがあるため、未初期化なら空で返す。
+  //   （発信先の描画が顧客マスタの宣言より先に走り、参照エラーで
+  //     以降の処理が止まっていた）
+  if(typeof JETCUSTS==="undefined" || !JETCUSTS) return null;
   const direct=(JETCUSTS||{})[String(id)];
   if(direct) return direct;
   // ★ 2026/09/12: キーと id がずれる場合があるので id でも探す
@@ -2164,7 +2178,35 @@ function jetCustById(id){
 function jetCustBySlug(slug){
   return jetCustList().find(c=>String(c.slug||"")===String(slug||"")) || null;
 }
+/* ★ 2026/09/13: 顧客アカウントは jet_customers の全体を読めない（ルールで制限）。
+   全体を読みに行くと401になり、顧客マスタが空のまま顧客が特定できず、
+   jet_scan/undefined/... を読みに行っていた。
+   顧客用ページでは、権限表(_acl/cust/<uid>)から自分の顧客IDを引き、
+   その顧客の情報だけを読む。 */
 async function loadJetCusts(){
+  // 顧客用ページ: 自分の分だけを読む
+  if(isCustMode()){
+    try{
+      const uid = window._fbAuth && window._fbAuth.currentUser && window._fbAuth.currentUser.uid;
+      if(uid){
+        const ra = await fbFetch(FB_URL+"/nikki/_acl/cust/"+encodeURIComponent(uid)+".json");
+        const myId = await ra.json();
+        if(myId){
+          const rc = await fbFetch(FB_URL+"/nikki/jet_customers/"+encodeURIComponent(String(myId))+".json");
+          const c = await rc.json();
+          if(c && typeof c==="object"){
+            JETCUSTS = {}; JETCUSTS[String(myId)] = Object.assign({id:String(myId)}, c);
+            try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(JETCUSTS)); }catch(e){}
+            return;
+          }
+        }
+      }
+    }catch(e){}
+    // 取れなければ端末に残っている分で動かす
+    try{ JETCUSTS = JSON.parse(localStorage.getItem(JETCUSTS_LS)||"{}") || {}; }catch(e2){ JETCUSTS={}; }
+    return;
+  }
+  // 社内用: 全体を読む
   try{
     const r = await fbFetch(FB_URL+"/nikki/jet_customers.json");
     const v = await r.json();
@@ -2173,7 +2215,6 @@ async function loadJetCusts(){
       try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(v)); }catch(e){}
     }
   }catch(e){
-    // 通信できないときは端末に残っている一覧で動かす
     try{ JETCUSTS = JSON.parse(localStorage.getItem(JETCUSTS_LS)||"{}") || {}; }catch(e2){ JETCUSTS={}; }
   }
 }
