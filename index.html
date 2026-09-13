@@ -928,7 +928,9 @@ const shiftKey=sh=>DEVICE+"_"+sh.id;
    顧客IDは便のデータ（custId / custName）に記録し続けるので、
    後から階層に分ける移行はいつでもできる。
    ※ 顧客用ページでの分離は、階層化が終わるまで成立しない。 */
-const JET_USE_CUST_PATH = false;
+// ★ 2026/09/13: 経営管理で旧データの移行が完了したら true にする。
+//   true にすると読み書きが jet_scan/<顧客ID>/<日付> になり、顧客ごとに分離される。
+const JET_USE_CUST_PATH = true;
 const jetScanPath=(custId,date,key)=>{
   const c=String(custId||"").trim();
   const head = (JET_USE_CUST_PATH && c && c!=="_legacy") ? ("/"+encodeURIComponent(c)) : "";
