@@ -2198,8 +2198,25 @@ const normId=id=>String(id||"").replace(/[０-９]/g,c=>String.fromCharCode(c.ch
    経営管理で登録した顧客の一覧。開始画面の選択と、顧客用の管理画面で使う。
    形: { <顧客ID>: { id, name, slug, pinHash, active } } */
 // ★ 2026/09/13: JETCUSTS の宣言はファイル前方へ移動した。
+/* ★ 2026/09/13: 顧客マスタを正規化する。
+   Firebase から取った内容に id が無いことがあり（数値キーが配列に変換される等）、
+   String(undefined) で '35' の代わりに 'undefined' が顧客IDとして使われ、
+   jet_scan/undefined/... を読みに行っていた。キーから id を補う。 */
+function _jetCustNormalize(){
+  const src = JETCUSTS || {};
+  const out = {};
+  Object.keys(src).forEach(k=>{
+    const c = src[k];
+    if(!c || typeof c!=="object") return;
+    const id = String((c.id!==undefined && c.id!==null && c.id!=="") ? c.id : k);
+    out[id] = Object.assign({}, c, { id });
+  });
+  JETCUSTS = out;
+  return out;
+}
 function jetCustList(){
-  return Object.values(JETCUSTS||{}).filter(c=>c && c.active!==false);
+  return Object.values(JETCUSTS||{})
+    .filter(c=>c && c.active!==false && c.id!==undefined && String(c.id)!=="undefined");
 }
 function jetCustById(id){
   // ★ 2026/09/13: 宣言前に呼ばれることがあるため、未初期化なら空で返す。
@@ -2231,7 +2248,8 @@ async function loadJetCusts(){
           const rc = await fbFetch(FB_URL+"/nikki/jet_customers/"+encodeURIComponent(String(myId))+".json");
           const c = await rc.json();
           if(c && typeof c==="object"){
-            JETCUSTS = {}; JETCUSTS[String(myId)] = Object.assign({id:String(myId)}, c);
+            JETCUSTS = {}; JETCUSTS[String(myId)] = Object.assign({}, c, {id:String(myId)});
+            _jetCustNormalize();
             try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(JETCUSTS)); }catch(e){}
             return;
           }
@@ -2248,10 +2266,12 @@ async function loadJetCusts(){
     const v = await r.json();
     if(v && typeof v==="object"){
       JETCUSTS = v;
-      try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(v)); }catch(e){}
+      _jetCustNormalize();
+      try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(JETCUSTS)); }catch(e){}
     }
   }catch(e){
     try{ JETCUSTS = JSON.parse(localStorage.getItem(JETCUSTS_LS)||"{}") || {}; }catch(e2){ JETCUSTS={}; }
+    _jetCustNormalize();
   }
 }
 /* ★ 2026/09/12: 顧客名の取り扱い。
@@ -2323,10 +2343,15 @@ let admCustId=null;
    これが無いと、0981 や 1108 で開いたときに顧客が空のままになり、
    顧客配下のデータを探せず「記録のある日」が端末の分しか出なかった。 */
 function effCustId(){
-  const v = admCustId || S.custId || "";
-  if(v) return String(v);
+  // ★ 2026/09/13: 'undefined' や 'null' という文字列を顧客IDとして扱わない
+  const ok = x => {
+    const v = String(x==null ? "" : x).trim();
+    return (v && v!=="undefined" && v!=="null") ? v : "";
+  };
+  const v = ok(admCustId) || ok(S.custId);
+  if(v) return v;
   const list = (typeof jetCustList==="function") ? jetCustList() : [];
-  return list.length===1 ? String(list[0].id) : "";
+  return list.length===1 ? ok(list[0].id) : "";
 }
 
 /* ★ 2026/09/12: 顧客用URL( ?c=<slug> )の扱い。
