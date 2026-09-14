@@ -578,6 +578,9 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <button class="btn sm primary" id="btnNewShift">次の便を始める</button>
   </div>
   <button class="btn wide" id="btnCallSum">局へ発信</button>
+  <!-- ★ 2026/09/14: 1日に複数の顧客をまわる場合、差出票は顧客ごとに書く。
+       既定は今の顧客。顧客が1社しかない日はこの欄を出さない。 -->
+  <div class="field" id="sumCustField" style="display:none"><select class="day" id="sumCust"></select></div>
   <div class="field"><select class="day" id="sumWho"></select></div>
   <table id="sumTable"><thead><tr><th>便 / ドライバー</th><th>3cm</th><th>5cm</th><th>合計</th></tr></thead><tbody></tbody><tfoot></tfoot></table>
   <p class="note" id="sumNote"></p>
@@ -1061,14 +1064,20 @@ async function fetchJetScan(custId,date,allowLegacy){
   if(c){
     try{
       const r=await fbFetch(FB_URL+jetScanPath(c,date)+".json");
+      // ★ 2026/09/14: 401でも fetch は例外にならず、本文は {"error":...} という
+      //   オブジェクトで返る。そのまま返すと「通信できた」ことになってしまう。
+      if(!r.ok) throw new Error("HTTP "+r.status);
       const v=await r.json();
+      if(v && v.error) throw new Error(String(v.error));
       if(v && Object.keys(v).length) return v;
     }catch(e){}
     if(!allowLegacy) return null;
   }
   try{
     const r2=await fbFetch(FB_URL+"/nikki/jet_scan/"+date+".json");
-    return await r2.json();
+    if(!r2.ok) return null;
+    const v2=await r2.json();
+    return (v2 && v2.error) ? null : v2;
   }catch(e){ return null; }
 }
 const shCustId=sh=>String((sh&&sh.custId)||S.custId||"_legacy");
@@ -2007,6 +2016,7 @@ function finishAfterClose(sh,call){
 function doClose(sh){
   sh.closed=true; sh.closedAt=Date.now(); save(); markDirty(sh); scheduleSync(0);
   sumWho=driverKeyOf(sh)||"__all";        // 締めた本人の便だけを表示
+  sumCust=String(sh.custId||S.custId||"")||null;   // ★ 2026/09/14: 顧客も締めた便に合わせる
   beep(880,120,.06); openSummary(); showView();
 }
 $("btnClose").onclick=()=>{
@@ -2071,6 +2081,8 @@ $("btnNewShift").onclick=()=>{ closeSheets(); if(inScan()){ notify("まだ締め
 
 /* ---------- 集計 ---------- */
 let sumWho=null;   // null=全員 / それ以外は driverId または氏名
+let sumCust=null;  // ★ 2026/09/14: null=未設定（今の顧客を既定にする）/ "__all"=全社 / 顧客ID
+function sumCustIdOf(sh){ return String((sh&&sh.custId)||""); }
 const gone=new Map();                      // 削除直後の便がサーバーから読み戻るのを防ぐ
 function markGone(k){ gone.set(k,Date.now()); }
 function isGone(k){
@@ -2103,17 +2115,30 @@ function driverKeyOf(sh){ return sh.driverId?normId(sh.driverId):(sh.driver||"")
 let dayAll=[], dayAllAt=0, dayAllRemote=false;
 async function fetchDayAll(){
   const map=new Map();
-  try{
-    const v=await fetchJetScan(S.custId,S.date);
-    if(v&&typeof v==="object"){
-      Object.values(v).forEach(j=>{ if(!j||!j.key||isGone(j.key)) return;
-        map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
-          scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
-          c3:j.c3||0,c5:j.c5||0,
-          startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,exportedAt:j.exportedAt||null,_remote:true,_key:j.key,_dev:j.device||""}); });
-      dayAllRemote=true;
-    }
-  }catch(e){ dayAllRemote=false; }
+  /* ★ 2026/09/14: 顧客ごとの階層になってから、本日分は「最後に開始した顧客」の
+     ぶんしか集めていなかった。1日に複数の顧客をまわると、別端末の便が
+     集計から抜ける。登録されている顧客を順に読んで全部集める。 */
+  const ids=[];
+  try{ jetCustList().forEach(c=>{ const i=String(c.id||"").trim(); if(i&&ids.indexOf(i)<0) ids.push(i); }); }catch(e){}
+  const _mine=String(S.custId||"").trim();
+  if(_mine && ids.indexOf(_mine)<0) ids.push(_mine);
+  let _okAny=false;
+  for(const cid of ids){
+    try{
+      const v=await fetchJetScan(cid,S.date);
+      if(v&&typeof v==="object"){
+        _okAny=true;
+        const _cn=(jetCustById(cid)||{}).name||"";
+        Object.values(v).forEach(j=>{ if(!j||!j.key||isGone(j.key)) return;
+          map.set(j.key,{bin:j.bin||"",driver:j.driverName||"",driverId:j.driverId||"",
+            custId:String(j.custId||cid), custName:j.custName||_cn,
+            scans:Array.isArray(j.scans)?j.scans.map(x=>({no:x.no,size:x.size,ts:x.ts})):null,
+            c3:j.c3||0,c5:j.c5||0,
+            startedAt:j.startedAt||0,closedAt:j.closedAt||null,closed:!!j.closed,exportedAt:j.exportedAt||null,_remote:true,_key:j.key,_dev:j.device||""}); });
+      }
+    }catch(e){}
+  }
+  dayAllRemote=_okAny;
   S.shifts.forEach(sh=>{ map.set(shiftKey(sh),sh); });   // この端末の分は常に最新を優先
   dayAll=Array.from(map.values()).sort((a,b)=>(a.startedAt||0)-(b.startedAt||0));
   dayAllAt=Date.now();
@@ -2123,12 +2148,34 @@ function openSummary(){
   dayAll=S.shifts.slice(); dayAllRemote=false; paintSummary();
 }
 function paintSummary(){
-  $("btnCallSum").textContent=(postOf().name||"郵便局")+"へ発信"; $("btnCallSum").disabled=!(postOf().tel||"").trim();
+  /* ★ 2026/09/14: 顧客の選択。差出票の転記と局への発信は顧客ごとに変わるため、
+     ドライバーの選択より先に顧客を決める。 */
+  const custs=[];
+  dayAll.forEach(sh=>{
+    const k=sumCustIdOf(sh); if(!k) return;
+    if(!custs.some(c=>c.k===k)) custs.push({k:k, n:(sh.custName||(jetCustById(k)||{}).name||("顧客"+k))});
+  });
+  if(sumCust===null || (sumCust!=="__all" && !custs.some(c=>c.k===sumCust))){
+    const mine=String(S.custId||"");
+    sumCust = custs.some(c=>c.k===mine) ? mine : (custs.length===1 ? custs[0].k : "__all");
+  }
+  const cf=$("sumCustField"), cs=$("sumCust");
+  if(cf) cf.style.display = custs.length>1 ? "" : "none";
+  if(cs && custs.length>1){
+    cs.innerHTML=custs.map(c=>'<option value="'+c.k+'"'+(sumCust===c.k?" selected":"")+">"+c.n+"</option>").join("")+
+      '<option value="__all"'+(sumCust==="__all"?" selected":"")+">全社まとめて</option>";
+    cs.onchange=()=>{ sumCust=cs.value; paintSummary(); };
+  }
+  // 集計に出す便を顧客で絞る（以降の処理はこの dayCust を使う）
+  const dayCust = (sumCust==="__all") ? dayAll : dayAll.filter(sh=>sumCustIdOf(sh)===sumCust);
+  // 発信先は顧客ごとの差出先。全社まとめてのときは今の顧客のまま。
+  const _post = postOf(sumCust==="__all" ? S.custId : sumCust);
+  $("btnCallSum").textContent=(_post.name||"郵便局")+"へ発信"; $("btnCallSum").disabled=!(_post.tel||"").trim();
   $("btnCancelShift").className="btn wide danger"+(inScan()?"":" hide");
   $("cancelNote").className="note"+(inScan()?"":" hide");
   const tb=$("sumTable").querySelector("tbody"), tf=$("sumTable").querySelector("tfoot");
   // ドライバー選択：既定は開始画面に入っている人（無ければ最後の便の人）
-  const people=[]; dayAll.forEach(sh=>{ const k=driverKeyOf(sh); if(k&&!people.some(p=>p.k===k)) people.push({k:k,n:sh.driver||k}); });
+  const people=[]; dayCust.forEach(sh=>{ const k=driverKeyOf(sh); if(k&&!people.some(p=>p.k===k)) people.push({k:k,n:sh.driver||k}); });
   if(sumWho===null||(sumWho!=="__all"&&!people.some(p=>p.k===sumWho))){
     const curId=normId($("sId")?.value||""), curNm=($("sDrv")?.value||"").trim();
     const hit=people.find(p=>p.k===curId)||people.find(p=>p.n===curNm)||(people.length?people[people.length-1]:null);
@@ -2138,16 +2185,26 @@ function paintSummary(){
   who.innerHTML=people.map(p=>'<option value="'+p.k+'"'+(sumWho===p.k?" selected":"")+">"+p.n+"</option>").join("")+
     '<option value="__all"'+(sumWho==="__all"?" selected":"")+">全員</option>";
   who.onchange=()=>{ sumWho=who.value; paintSummary(); };
-  const list=sumWho==="__all"?dayAll:dayAll.filter(sh=>driverKeyOf(sh)===sumWho);
+  const list=sumWho==="__all"?dayCust:dayCust.filter(sh=>driverKeyOf(sh)===sumWho);
   let t3=0,t5=0;
   tb.innerHTML=list.length?list.map(sh=>{
     const c=cnt(sh), a=c.a, b=c.b;
     t3+=a;t5+=b;
-    return "<tr><td>"+sh.bin+"<br><span style='font-size:11px;color:#4A5B6B'>"+(sh.driver||"")+"</span></td><td class='num'>"+a+"</td><td class='num'>"+b+"</td><td class='num'>"+(a+b)+"</td></tr>";
+    // ★ 2026/09/14: 全社まとめてのときは、どの顧客の便かを行に出す
+    const _cn=(sumCust==="__all") ? (sh.custName||(jetCustById(sumCustIdOf(sh))||{}).name||"") : "";
+    return "<tr><td>"+sh.bin+"<br><span style='font-size:11px;color:#4A5B6B'>"+(sh.driver||"")+"</span>"+
+      (_cn?"<br><span style='font-size:11px;color:#14528F;font-weight:700'>"+_cn+"</span>":"")+
+      "</td><td class='num'>"+a+"</td><td class='num'>"+b+"</td><td class='num'>"+(a+b)+"</td></tr>";
   }).join(""):"<tr><td colspan='4'>まだ便がありません</td></tr>";
   tf.innerHTML="<tr><td>"+(sumWho==="__all"?"本日合計":"本人合計")+"</td><td class='num'>"+t3+"</td><td class='num'>"+t5+"</td><td class='num'>"+(t3+t5)+"</td></tr>";
-  $("sumNote").textContent="差出票へ転記：3cm "+t3+"個、5cm "+t5+"個、計 "+(t3+t5)+"個"+
-    (dayAllRemote?"（全端末の本日分）":"（通信できないため、この端末の分のみ）");
+  // ★ 2026/09/14: 差出票は顧客ごと。どの顧客ぶんの数字かを必ず添える。
+  const _cLabel = (sumCust==="__all")
+    ? "全社まとめて"
+    : ((custs.find(c=>c.k===sumCust)||{}).n || "");
+  $("sumNote").textContent=(_cLabel?"["+_cLabel+"] ":"")+
+    "差出票へ転記：3cm "+t3+"個、5cm "+t5+"個、計 "+(t3+t5)+"個"+
+    (dayAllRemote?"（全端末の本日分）":"（通信できないため、この端末の分のみ）")+
+    (sumCust==="__all"&&custs.length>1?"　※顧客ごとに分けて転記してください":"");
 
   $("times").innerHTML=list.length?list.map(sh=>{
     return '<div class="row"><span style="flex:1"><b>'+sh.bin+"</b> "+(sh.driver||"")+
