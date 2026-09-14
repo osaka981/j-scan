@@ -977,7 +977,14 @@ function canonId(id){
 function findDriver(id){
   if(!MASTER) return null;
   const t=canonId(id), plain=t.replace("-","");
-  return MASTER.drivers.find(d=>[d.id,d.empNo,d.driverNo].some(v=>v&&(v===t||v.replace("-","")===plain)))||null;
+  /* ★ 2026/09/14: 社員番号は変わりうる。経営管理が残す過去の番号(empNoHistory)と、
+     変わらない鍵(uid)も照合先に入れる。これで番号を変えた人でも、
+     旧番号が書かれた過去データや古い控えから同じ人に行き着く。 */
+  const hit=v=>{ const x=String(v==null?"":v).trim(); return !!x&&(x===t||x.replace("-","")===plain); };
+  return MASTER.drivers.find(d=>{
+    if([d.id,d.empNo,d.driverNo,d.uid].some(hit)) return true;
+    return Array.isArray(d.empNoHistory) && d.empNoHistory.some(hit);
+  })||null;
 }
 function findCompany(id){
   if(!MASTER) return null;
