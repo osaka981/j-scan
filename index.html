@@ -870,6 +870,15 @@ const MKEY="jet-master-v1";
 let MASTER=null;   // {drivers:[], companies:[], at}
 function asArr(v){ return Array.isArray(v)?v.filter(Boolean):(v?Object.values(v).filter(Boolean):[]); }
 async function loadMaster(force){
+  // ★ 2026/09/13: 顧客アカウントは drivers / companies を読めない（ルールで制限）。
+  //   顧客用ページではドライバーの照合が不要なので読みに行かない。
+  //   読みに行くと401が並ぶだけで、原因の切り分けを難しくする。
+  try{
+    if(typeof isCustMode==="function" && isCustMode()){
+      MASTER={drivers:[],companies:[],at:Date.now()};
+      return MASTER;
+    }
+  }catch(e){}
   if(!force){ try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c&&Date.now()-c.at<30*60*1000){ MASTER=c; return c; } }catch(e){} }
   try{
     const [d,c]=await Promise.all([
@@ -2901,6 +2910,12 @@ function openDayDetail(day){
 async function loadDetPhotos(date,sh){
   const el=$("detPhotos"); el.innerHTML='<p class="note">読み込み中</p>';
   let v=null;
+  // ★ 2026/09/13: 写真は弊社内部の証跡で、顧客は読めない（ルールで制限）。
+  //   顧客用ページでは読みに行かない。
+  if(typeof isCustMode==="function" && isCustMode()){
+    el.innerHTML='<p class="note">回収資料の写真は弊社内部の記録のため表示されません。</p>';
+    return;
+  }
   try{ const r=await fbFetch(FB_URL+"/nikki/jet_photos/"+date+"/"+(sh?keyOf(sh):"noshift")+".json"); v=await r.json(); }catch(e){}
   const keys=v&&typeof v==="object"?Object.keys(v).sort():[];
   el.innerHTML=keys.length?'<div class="chips">'+keys.map(k=>
