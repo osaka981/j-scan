@@ -611,7 +611,16 @@ const FB_CONFIG={
   appId:"1:86627546503:web:62d338fb75ebaa91bbcf22"
 };
 window._fbToken=null;
-window._fbReady=new Promise(res=>{ window._fbReadyDone=res; });
+/* ★ 2026/09/14: 認証待ち(_fbReady)は1回きりの約束だったため、最初に
+   「トークン無しのまま完了」になると、以降ずっと未認証で通信していた。
+   取り直せる形にする。 */
+let _fbReadyRes=null;
+window._fbReady=new Promise(res=>{ _fbReadyRes=res; });
+window._fbReadyDone=v=>{ if(_fbReadyRes){ const r=_fbReadyRes; _fbReadyRes=null; r(v); } };
+window._fbRearm=()=>{
+  if(!_fbReadyRes && !window._fbToken) window._fbReady=new Promise(res=>{ _fbReadyRes=res; });
+  return window._fbReady;
+};
 try{
   const app=initializeApp(FB_CONFIG,"jet-scan");
   const auth=getAuth(app);
@@ -622,6 +631,7 @@ try{
      通常のURLで開いたときに顧客アカウントのままなら、解除して匿名に戻す。 */
   const _isCustUrl = (()=>{ try{ return !!new URLSearchParams(location.search).get("c"); }catch(e){ return false; } })();
   const _isCustAccount = u => !!(u && String(u.email||"").endsWith("@scan.local"));
+  let _anonTries=0;
   onIdTokenChanged(auth,async u=>{
     if(!_isCustUrl && _isCustAccount(u)){
       // 顧客のログインが残っている → 解除して匿名で入り直す
@@ -629,12 +639,26 @@ try{
       try{ await signInAnonymously(auth); }catch(e){}
       return;   // 匿名で入り直すと、この関数がもう一度呼ばれる
     }
-    if(u){ try{ window._fbToken=await u.getIdToken(); }catch(e){} }
-    window._fbReadyDone(true);
+    /* ★ 2026/09/14: signOut の直後にも、この関数は u=null で呼ばれる。
+       以前はそこで window._fbReadyDone(true) を実行しており、トークンが無い
+       まま「認証は整った」ことになっていた。その状態で顧客マスタを読むため
+       401になり、jetCustList() が0件のまま確定していた。
+       ユーザーが居ないときは匿名で入り直し、トークンが取れてから完了にする。 */
+    if(!u){
+      window._fbToken=null;
+      if(_anonTries++ < 3){ try{ await signInAnonymously(auth); }catch(e){ window._fbReadyDone(false); } }
+      else { window._fbReadyDone(false); }
+      return;
+    }
+    _anonTries=0;
+    try{ window._fbToken=await u.getIdToken(); }catch(e){ window._fbToken=null; }
+    window._fbReadyDone(!!window._fbToken);
   });
   window._fbAuth = auth;
   window._fbAuthFns = { signInWithEmailAndPassword, updatePassword, signOut };
-  if(!auth.currentUser) signInAnonymously(auth).catch(()=>window._fbReadyDone(false));
+  /* ★ 2026/09/14: ここで無条件に匿名ログインすると、顧客用URL(?c=)で
+     端末に残っている顧客のログインを消してしまうことがある（復元は非同期で、
+     この時点の currentUser はまだ null のため）。上の u=null の分岐に任せる。 */
   setInterval(async()=>{ try{ const u=auth.currentUser; if(u) window._fbToken=await u.getIdToken(); }catch(e){} },30*60*1000);
   setTimeout(()=>window._fbReadyDone(false),6000);   // 認証が返らなくても止めない
 }catch(e){ window._fbReadyDone(false); }
@@ -872,12 +896,32 @@ setInterval(loadSettings,10*60*1000);
 /* ---------- ID照合（日報アプリの登録データ） ---------- */
 const FB_URL="https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app";
 // Firebase への通信は認証トークンを付ける（未取得でも待たずに通す）
-let fbAuthWaited=false;
-async function fbFetch(url,opts){
-  if(!fbAuthWaited){ fbAuthWaited=true; try{ await window._fbReady; }catch(e){} }
+/* ★ 2026/09/14: ルールを「認証済みのみ」にした後は、トークン無しの通信は
+   すべて401になる。以前は最初の1回しか認証を待たなかったため、起動直後に
+   間に合わなかった読み込みが、そのまま失敗で確定していた。
+   ① トークン未取得なら毎回待つ（最大6秒）② 送る直前にSDKから取り直す
+   ③ それでも401なら強制更新して1度だけやり直す */
+async function _fbWaitAuth(ms){
+  const p=(typeof window._fbRearm==="function") ? window._fbRearm() : window._fbReady;
+  return Promise.race([p, new Promise(res=>setTimeout(()=>res(false), ms||6000))]);
+}
+async function fbFetch(url,opts,_retried){
+  if(!window._fbToken){ try{ await _fbWaitAuth(6000); }catch(e){} }
+  try{
+    const cu=window._fbAuth && window._fbAuth.currentUser;
+    if(cu) window._fbToken=await cu.getIdToken();
+  }catch(e){}
   const t=window._fbToken;
-  if(t) url+=(url.indexOf("?")<0?"?":"&")+"auth="+encodeURIComponent(t);
-  return fetch(url,opts);
+  const u2=t ? url+(url.indexOf("?")<0?"?":"&")+"auth="+encodeURIComponent(t) : url;
+  const r=await fetch(u2,opts);
+  if(r.status===401 && !_retried){
+    try{
+      const cu=window._fbAuth && window._fbAuth.currentUser;
+      window._fbToken = cu ? await cu.getIdToken(true) : null;
+    }catch(e){ window._fbToken=null; }
+    return fbFetch(url,opts,true);
+  }
+  return r;
 }
 const MKEY="jet-master-v1";
 let MASTER=null;   // {drivers:[], companies:[], at}
@@ -2256,11 +2300,11 @@ async function loadJetCusts(){
       const uid = window._fbAuth && window._fbAuth.currentUser && window._fbAuth.currentUser.uid;
       if(uid){
         const ra = await fbFetch(FB_URL+"/nikki/_acl/cust/"+encodeURIComponent(uid)+".json");
-        const myId = await ra.json();
-        if(myId){
+        const myId = ra.ok ? await ra.json() : null;   // ★ 2026/09/14: 401の本文を採用しない
+        if(myId && typeof myId!=="object"){
           const rc = await fbFetch(FB_URL+"/nikki/jet_customers/"+encodeURIComponent(String(myId))+".json");
-          const c = await rc.json();
-          if(c && typeof c==="object"){
+          const c = rc.ok ? await rc.json() : null;
+          if(c && typeof c==="object" && !c.error){
             JETCUSTS = {}; JETCUSTS[String(myId)] = Object.assign({}, c, {id:String(myId)});
             _jetCustNormalize();
             try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(JETCUSTS)); }catch(e){}
@@ -2276,10 +2320,17 @@ async function loadJetCusts(){
   // 社内用: 全体を読む
   try{
     const r = await fbFetch(FB_URL+"/nikki/jet_customers.json");
+    /* ★ 2026/09/14: fetch は401でも例外にならない。しかも本文が
+       {"error":"Permission denied"} という「オブジェクト」なので、
+       これを顧客マスタとして採用してしまい、さらに端末の控えまで
+       空で上書きしていた（読み直しても復旧しない原因）。 */
+    if(!r.ok) throw new Error("HTTP "+r.status);
     const v = await r.json();
-    if(v && typeof v==="object"){
-      JETCUSTS = v;
-      _jetCustNormalize();
+    if(!v || typeof v!=="object" || v.error) throw new Error("bad body");
+    JETCUSTS = v;
+    _jetCustNormalize();
+    // 中身が取れたときだけ端末の控えを更新する（空では上書きしない）
+    if(jetCustList().length){
       try{ localStorage.setItem(JETCUSTS_LS, JSON.stringify(JETCUSTS)); }catch(e){}
     }
   }catch(e){
@@ -3185,6 +3236,12 @@ window.addEventListener("beforeunload",save);
 
 // ★ 2026/09/12: 顧客マスタを読み込んでから画面を整える
 loadJetCusts().then(async ()=>{
+  /* ★ 2026/09/14: 起動直後は認証が間に合わないことがあるため、
+     空だったときは認証を待って1度だけ読み直す。 */
+  if(!isCustMode() && !jetCustList().length){
+    try{ await _fbWaitAuth(6000); }catch(e){}
+    try{ await loadJetCusts(); }catch(e){}
+  }
   try{ paintCustSelect(); }catch(e){}
   try{ applyCustMode(); }catch(e){}
   if(!isCustMode()) return;
