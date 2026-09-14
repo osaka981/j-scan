@@ -615,13 +615,26 @@ window._fbReady=new Promise(res=>{ window._fbReadyDone=res; });
 try{
   const app=initializeApp(FB_CONFIG,"jet-scan");
   const auth=getAuth(app);
+  /* ★ 2026/09/13: 顧客アカウントのログインが、通常のURLにも残ってしまう問題への対処。
+     配布URL(?c=...)で顧客としてログインすると、その状態は同じブラウザの
+     通常のURLにも引き継がれる。顧客は社内向けのノードを読めないため、
+     ドライバー画面や社内用の管理画面でデータが出なくなっていた。
+     通常のURLで開いたときに顧客アカウントのままなら、解除して匿名に戻す。 */
+  const _isCustUrl = (()=>{ try{ return !!new URLSearchParams(location.search).get("c"); }catch(e){ return false; } })();
+  const _isCustAccount = u => !!(u && String(u.email||"").endsWith("@scan.local"));
   onIdTokenChanged(auth,async u=>{
+    if(!_isCustUrl && _isCustAccount(u)){
+      // 顧客のログインが残っている → 解除して匿名で入り直す
+      try{ await signOut(auth); }catch(e){}
+      try{ await signInAnonymously(auth); }catch(e){}
+      return;   // 匿名で入り直すと、この関数がもう一度呼ばれる
+    }
     if(u){ try{ window._fbToken=await u.getIdToken(); }catch(e){} }
     window._fbReadyDone(true);
   });
   window._fbAuth = auth;
   window._fbAuthFns = { signInWithEmailAndPassword, updatePassword, signOut };
-  signInAnonymously(auth).catch(()=>window._fbReadyDone(false));
+  if(!auth.currentUser) signInAnonymously(auth).catch(()=>window._fbReadyDone(false));
   setInterval(async()=>{ try{ const u=auth.currentUser; if(u) window._fbToken=await u.getIdToken(); }catch(e){} },30*60*1000);
   setTimeout(()=>window._fbReadyDone(false),6000);   // 認証が返らなくても止めない
 }catch(e){ window._fbReadyDone(false); }
