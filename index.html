@@ -757,13 +757,41 @@ document.addEventListener("touchstart",unlockAudio,{once:true});
 document.addEventListener("mousedown",unlockAudio,{once:true});
 
 /* ---------- 共有設定（発信先など。Firebase nikki/jet_settings） ---------- */
+/* ★ 2026/09/13: 宣言をファイル前方へ移した。
+   loadSettings などが宣言より先に呼ばれ、初期化前の参照で止まっていたため。
+   ★ 2026/09/12 修正: 以前は ?c= を端末に保存し、次回から通常のURLで開いても
+   顧客専用ページのままだった。ドライバーの端末で配布URLを誤って開くと
+   業務ができなくなるため、保存をやめてURLのパラメータだけで判定する。
+   ホーム画面に追加する場合は、?c= 付きのURLのまま追加してもらう
+   （追加したショートカットはパラメータを保持する）。 */
+let CUST_SLUG = "";
+(function(){
+  try{ CUST_SLUG = new URLSearchParams(location.search).get("c") || ""; }
+  catch(e){ CUST_SLUG = ""; }
+  // 以前の版が保存した値が残っていると顧客専用のままになるので消す
+  try{ localStorage.removeItem("jscan_cust_slug"); }catch(e){}
+})();
+const isCustMode = () => !!CUST_SLUG;
+
+/* ★ 2026/09/13: 計数顧客マスタの入れ物。
+   発信先の描画などが宣言より先に走って初期化前の参照で止まっていたため、
+   宣言だけをファイル前方へ移した（中身の読み込みは従来どおり後半で行う）。 */
+let JETCUSTS = {};
+const JETCUSTS_LS = "jscan_jet_customers";
+
 const SETKEY="jet-settings-v1";
 let SET=(()=>{ try{ return JSON.parse(localStorage.getItem(SETKEY)||"{}"); }catch(e){ return {}; } })();
 async function loadSettings(){
   // ★ 2026/09/13: 顧客アカウントは jet_settings を読めない（ルールで制限）。
   //   読みに行くと401が出るだけなので、顧客用ページでは読まない。
   //   発信先は顧客ごとの設定（jet_customers/<id>）から取る。
-  const _custMode = (typeof isCustMode==="function") ? isCustMode() : false;
+  // ★ 2026/09/13: この関数は isCustMode の宣言より先に呼ばれることがあるため、
+  //   参照エラーにならないよう安全に判定する（URLのパラメータで直接見る）。
+  let _custMode = false;
+  try{ _custMode = isCustMode(); }
+  catch(e){
+    try{ _custMode = !!new URLSearchParams(location.search).get("c"); }catch(e2){}
+  }
   if(!_custMode){
     try{
       const r=await fbFetch(FB_URL+"/nikki/jet_settings.json"); const v=await r.json();
@@ -2160,8 +2188,7 @@ const normId=id=>String(id||"").replace(/[０-９]/g,c=>String.fromCharCode(c.ch
 /* ---------- ★ 2026/09/12: 計数顧客マスタ（nikki/jet_customers） ----------
    経営管理で登録した顧客の一覧。開始画面の選択と、顧客用の管理画面で使う。
    形: { <顧客ID>: { id, name, slug, pinHash, active } } */
-let JETCUSTS = {};
-const JETCUSTS_LS = "jscan_jet_customers";
+// ★ 2026/09/13: JETCUSTS の宣言はファイル前方へ移動した。
 function jetCustList(){
   return Object.values(JETCUSTS||{}).filter(c=>c && c.active!==false);
 }
@@ -2296,19 +2323,7 @@ function effCustId(){
 /* ★ 2026/09/12: 顧客用URL( ?c=<slug> )の扱い。
    このファイルの末尾でクエリを消しているため、先に控えて端末にも残す。
    ホーム画面に追加した場合も顧客が固定されたままになる。 */
-/* ★ 2026/09/12 修正: 以前は ?c= を端末に保存し、次回から通常のURLで開いても
-   顧客専用ページのままだった。ドライバーの端末で配布URLを誤って開くと
-   業務ができなくなるため、保存をやめてURLのパラメータだけで判定する。
-   ホーム画面に追加する場合は、?c= 付きのURLのまま追加してもらう
-   （追加したショートカットはパラメータを保持する）。 */
-let CUST_SLUG = "";
-(function(){
-  try{ CUST_SLUG = new URLSearchParams(location.search).get("c") || ""; }
-  catch(e){ CUST_SLUG = ""; }
-  // 以前の版が保存した値が残っていると顧客専用のままになるので消す
-  try{ localStorage.removeItem("jscan_cust_slug"); }catch(e){}
-})();
-const isCustMode = () => !!CUST_SLUG;
+// ★ 2026/09/13: CUST_SLUG / isCustMode の宣言はファイル前方へ移動した。
 
 /* ★ 2026/09/12: 顧客アカウントでのログイン。
    経営管理で発行したアカウント（<slug>@scan.local）でログインすると、
