@@ -909,6 +909,14 @@ function paintCall(){
   const n=$("postNote");
   if(n){
     const tel=(p.tel||"").trim();
+    /* ★ 2026/09/15: 顧客用URLでは出さない。
+       これはドライバー向けの案内（出発前にどこへ電話するか）で、顧客には
+       関係がない。しかもログイン前は顧客マスタを読めないため、設定済みでも
+       必ず「未設定」と表示され、顧客には意味不明な警告が出続けていた。 */
+    let _hide=false;
+    try{ _hide = isCustMode() && !isStaff; }catch(e){}
+    if(_hide){ n.textContent=""; n.style.display="none"; return; }
+    n.style.display="";
     n.textContent=tel?("発信先："+(p.name||"郵便局")+"　"+tel):"発信先が未設定です（管理画面で設定してください）";
     n.style.color=tel?"#4A5B6B":"#A8231C";
   }
