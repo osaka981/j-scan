@@ -2819,10 +2819,23 @@ function openAdmin(){
     const _c=jetCustById(admCustId||S.custId);
     _who.textContent=_c?(_c.name+" の差出先"):"共通の差出先（顧客が特定できないため）";
   }
-  loadSettings(true).then(()=>{
+  /* ★ 2026/09/15: 発信先は顧客ごと（jet_customers/<顧客ID>）に持っている。
+     これまで loadSettings（共通設定 jet_settings）しか読み直しておらず、
+     顧客マスタが未読込のまま postOf() を呼んでいたため、登録済みでも
+     新規に開いたときは空欄のままだった。顧客マスタも読み直す。 */
+  Promise.all([
+    loadSettings(true).catch(()=>{}),
+    (typeof loadJetCusts==="function" ? loadJetCusts().catch(()=>{}) : Promise.resolve())
+  ]).then(()=>{
     const _p=postOf(admCustId||S.custId);
-    if(!$("setPostName").value)$("setPostName").value=_p.name||"";
-    if(!$("setPostTel").value)$("setPostTel").value=_p.tel||"";
+    // 読み直した結果があれば入れ替える（空欄のときだけだと古い表示が残る）
+    if(_p.name) $("setPostName").value=_p.name;
+    if(_p.tel)  $("setPostTel").value=_p.tel;
+    // 顧客名の見出しも読み直した内容で出し直す
+    try{
+      const _who=$("setPostWho"), _c=jetCustById(admCustId||S.custId);
+      if(_who) _who.textContent=_c?(_c.name+" の差出先"):"共通の差出先（顧客が特定できないため）";
+    }catch(e){}
     paintCall();
   });
   fetchRemoteDates().then(updateDateNote);
