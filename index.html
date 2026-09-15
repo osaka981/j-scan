@@ -1141,6 +1141,11 @@ function shiftPayload(day,sh){
     carrierId:sh.carrierId||sh.driverId||"", carrierName:sh.carrierName||sh.driver||"",
     carrierDiffers:!!(sh.carrierName&&sh.carrierName!==sh.driver),
     corp:sh.corp||"", corpName:corpName(sh.corp), registered:sh.registered!==false,
+    /* ★ 2026/09/15: 便のレコードに委託会社IDを持たせる。
+       corp は 1/2/9 の大分類でしかなく、どの委託会社かは分からない。
+       Firebaseのルールが会社ごとに絞るにはこの値が必要。
+       計数した人と運んだ人で会社が違う場合があるので、両方を残す。 */
+    companyId:sh.companyId||"", carrierCompanyId:sh.carrierCompanyId||"",
     startedAt:sh.startedAt||null, closedAt:sh.closedAt||null, closed:!!sh.closed,
     c3:c.a, c5:c.b, total:c.a+c.b,
     dupCount:(day.dupLog||[]).filter(d=>d.bin===sh.bin).length,
@@ -1620,6 +1625,8 @@ $("btnStart").onclick=()=>{
   S.custId=custId; S.custName=cust.name||"";
   S.shifts.push({id:Date.now(),bin:isAutoBin(binIn)?nextBinFor(id,drv):tidyBin(binIn),
     driver:drv,tel:$("sTel").value.trim(),driverId:canonId(id),corp:corpFromId(id),
+    // ★ 2026/09/15: このドライバーの委託会社ID（自社なら空）
+    companyId:String((findDriver(id)||{}).companyId||""),
     registered:idState.kind==="driver",
     custId:custId, custName:cust.name||"",
     startedAt:Date.now(),closedAt:null,closed:false,scans:[]});
@@ -1977,8 +1984,12 @@ function openDrvPick(after){
 }
 function setCarrier(id,name){
   const sh=cur(); if(!sh) return;
-  if(!name||name===sh.driver){ sh.carrierId=""; sh.carrierName=""; }
-  else { sh.carrierId=id||""; sh.carrierName=name; }
+  if(!name||name===sh.driver){ sh.carrierId=""; sh.carrierName=""; sh.carrierCompanyId=""; }
+  else {
+    sh.carrierId=id||""; sh.carrierName=name;
+    // ★ 2026/09/15: 運搬者の委託会社ID（計数した人と会社が違う場合があるため別に持つ）
+    sh.carrierCompanyId=String((findDriver(id)||{}).companyId||"");
+  }
   save(); markDirty(sh); paintCarrier();
   closeSheets();
   const f=drvAfter; drvAfter=null;
@@ -2770,12 +2781,16 @@ function paintAdmCust(){
   const sel=$("admCust"), fld=$("admCustField");
   if(!sel||!fld) return;
   const list=jetCustList();
-  // 顧客用URLで開いている場合は切り替えさせない
+  /* 顧客用URLで開いている場合は切り替えさせない。
+     ★ 2026/09/15: これまで選べない選択欄をそのまま出していた。
+     顧客からは自社しか見えないので選ぶ余地が無く、顧客名は画面の見出しにも
+     出ている。紛らわしいだけなので欄ごと隠す。
+     社内用で顧客が1社だけのときも同様に隠す。 */
   if(!isStaff || isCustMode() || list.length<=1){
     const c=jetCustById(admCustId);
     sel.innerHTML=`<option value="${admCustId||""}">${(c&&c.name)||"—"}</option>`;
     sel.disabled=true;
-    fld.style.display=(c?"":"none");
+    fld.style.display="none";
     return;
   }
   sel.disabled=false; fld.style.display="";
