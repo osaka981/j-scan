@@ -269,6 +269,15 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
 #errFlash button{margin-top:28px;width:100%;max-width:420px;min-height:72px;font-size:22px;font-weight:800;
   font-family:inherit;color:#C4271D;background:#FFF;border:none;border-radius:12px;cursor:pointer}
 @keyframes errblink{0%{opacity:1}50%{opacity:.35}}
+/* ★ 2026/09/16: 画面から離れて戻ったときの再開画面。タップで入力を受け付ける状態に戻す */
+#resumeGate{position:fixed;inset:0;z-index:190;display:none;flex-direction:column;align-items:center;
+  justify-content:center;background:#B45309;color:#FFF;text-align:center;padding:24px}
+#resumeGate.on{display:flex}
+#resumeGate .t1{font-size:28px;font-weight:800;line-height:1.35}
+#resumeGate .t2{font-size:16px;margin-top:12px;line-height:1.6;white-space:pre-line}
+#resumeGate button{margin-top:26px;width:100%;max-width:420px;min-height:96px;font-size:24px;font-weight:800;
+  font-family:inherit;color:#B45309;background:#FFF;border:none;border-radius:14px;cursor:pointer}
+#focusSink{position:fixed;left:-9999px;top:0;width:1px;height:1px;outline:none}
 </style>
 </head>
 <body>
@@ -1405,22 +1414,53 @@ function paintLastRead(){
   else { el.textContent="最終 "+hhmm(lastScanAt)+"（"+Math.floor(sec/60)+"分前）"; el.style.color="#A8231C"; }
 }
 setInterval(paintLastRead,10000);
-window.addEventListener("blur",()=>{ if(inScan()) awayAt=Date.now(); });
-window.addEventListener("focus",()=>{
+/* ★ 2026/09/16: 画面から離れて戻ったときは、時間に関係なく「再開」タップを必須にする。
+   iPhone などでは、アプリに戻っても画面を一度タッチするまでリーダーの入力がアプリに届かない。
+   その間もリーダーは通常音を鳴らすため、戻った直後の読取が漏れていた。
+   タップを必須にすることで、入力を受け付ける状態に確実に戻す。 */
+let gateOpen=false;
+function markAway(){ if(inScan()&&!awayAt) awayAt=Date.now(); }
+function refocus(){
+  try{ window.focus(); }catch(e){}
+  try{ const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) a.blur(); }catch(e){}
+  try{ document.getElementById("focusSink").focus({preventScroll:true}); }catch(e){}
+}
+function openGate(){
   if(!awayAt||!inScan()){ awayAt=0; return; }
-  const sec=Math.round((Date.now()-awayAt)/1000); awayAt=0;
-  if(sec<3) return;
+  const ms=Date.now()-awayAt;
+  if(ms<300){ awayAt=0; refocus(); return; }     // 一瞬のフォーカス揺れは無視
+  const sec=Math.max(1,Math.round(ms/1000));
   const c=cnt(cur());
-  beep(300,180,.08); buzz([100,80,100]);
-  notify("この間の読み取りは記録されていません",
-    "アプリの外に画面が移っていた時間　約"+sec+"秒\n"+
-    "バッテリー警告や着信のバナーが出ると、リーダーの読み取りがアプリに届きません。\n\n"+
+  document.getElementById("resumeInfo").textContent=
+    "離れていた時間　約"+sec+"秒\n"+
+    "この間に読んだ分は記録されていません。\n"+
     "この便の件数：3cm "+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"\n"+
-    "数が合わない場合は、その間に通した分を読み直してください。");
+    "数が合わない場合は、その間に通した分を読み直してください。";
+  document.getElementById("resumeGate").classList.add("on");
+  if(!gateOpen){ beep(300,180,.08); setTimeout(()=>beep(300,180,.08),260); buzz([150,100,150]); }
+  gateOpen=true;
+  refocus();
+}
+function closeGate(){
+  gateOpen=false; awayAt=0;
+  document.getElementById("resumeGate").classList.remove("on");
+  refocus();
+  beep(880,70,.05);
+}
+window.addEventListener("blur",markAway);
+window.addEventListener("pagehide",markAway);
+document.addEventListener("visibilitychange",()=>{
+  if(document.visibilityState==="visible") openGate(); else markAway();
+});
+window.addEventListener("focus",openGate);
+window.addEventListener("pageshow",openGate);
+document.addEventListener("DOMContentLoaded",()=>{
+  const b=document.getElementById("resumeBtn");
+  if(b) b.addEventListener("click",closeGate);
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-11.62";
+const APP_VER="2026-09-16.1";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1987,7 +2027,7 @@ document.addEventListener("visibilitychange",()=>{
   if(document.visibilityState==="visible"){
     if(inScan()) keepAwake(true);
     const away=Date.now()-(hiddenAt||0);
-    if(hiddenAt&&away>8000&&inScan()){
+    if(false){
       const sh=cur(), c=cnt(sh);
       notify("画面が消えていた間は読み取れていません",
         "止まっていた時間 約"+Math.round(away/1000)+"秒\nこの便の件数：3cm "+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+
@@ -2057,6 +2097,7 @@ document.addEventListener("keydown",e=>{
     if(!inScan()) return;
     // ★ 2026/09/16: 確認画面が出ている間の読取はカウントせず、もう一度警告する
     if(errOpen){ readError("確認画面が出ている間に読み取りました"); return; }
+    if(gateOpen){ readError("「タップして読み取りを再開」を押してから読み直してください"); return; }
     // ★ 2026/09/16: 以前は他の画面を開いている間の読取を無音で捨てていた
     if(askOpen||(sheetOpen&&!dupOpen&&!oddOpen)){ readError("画面を閉じてから読み直してください"); return; }
     handle(code);
@@ -3684,6 +3725,12 @@ try{
     history.replaceState(null,"",location.pathname);
 }catch(e){}
 </script>
+<div id="resumeGate" role="alertdialog" aria-modal="true">
+  <div class="t1">画面から離れていました<br>タップして再開してください</div>
+  <div class="t2" id="resumeInfo"></div>
+  <button type="button" id="resumeBtn">タップして読み取りを再開</button>
+</div>
+<div id="focusSink" tabindex="-1"></div>
 <div id="errFlash" role="alertdialog" aria-modal="true">
   <div class="t1">読み直してください</div>
   <div class="t2" id="errFlashSub"></div>
