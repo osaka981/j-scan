@@ -883,11 +883,13 @@ let AC=null;
    立ち上がり・終わりを数ミリ秒なめらかにして、プツッという雑音も防ぐ。 */
 const SND_MASTER=1.0;            // 全体の音量（1.0 = 最大）。大きすぎる場合はここを下げる
 /* ★ 2026/09/16: エラー音だけ別に大きさを変えられるようにする（10段階。この端末に保存） */
+// 標準値（登録5・エラー8）をそろえるため、試験中に各端末で動かした値を一度だけ消す
+try{ if(localStorage.getItem("jet-vol-std")!=="1"){ localStorage.removeItem("jet-reg-vol"); localStorage.removeItem("jet-err-vol"); localStorage.setItem("jet-vol-std","1"); } }catch(e){}
 const ERRVOL_LS="jet-err-vol";
-let ERR_VOL=(()=>{ try{ const v=parseInt(localStorage.getItem(ERRVOL_LS),10); return (v>=1&&v<=10)?v:7; }catch(e){ return 7; } })();
+let ERR_VOL=(()=>{ try{ const v=parseInt(localStorage.getItem(ERRVOL_LS),10); return (v>=1&&v<=10)?v:8; }catch(e){ return 8; } })();
 /* ★ 2026/09/16: 登録音（いちばん多く聞く音）は耳に優しい音色にし、大きさも別に変えられるようにする */
 const REGVOL_LS="jet-reg-vol";
-let REG_VOL=(()=>{ try{ const v=parseInt(localStorage.getItem(REGVOL_LS),10); return (v>=1&&v<=10)?v:6; }catch(e){ return 6; } })();
+let REG_VOL=(()=>{ try{ const v=parseInt(localStorage.getItem(REGVOL_LS),10); return (v>=1&&v<=10)?v:5; }catch(e){ return 5; } })();
 let OUT=null, OUT_ERR=null, ERR_GAIN=null, OUT_REG=null, REG_GAIN=null, OUT_AC=null;
 function sndOut(kind){
   if(!(OUT && OUT_AC===AC)){
@@ -1027,14 +1029,14 @@ document.addEventListener("DOMContentLoaded",()=>{
   const rv=document.getElementById("regVol"), rvv=document.getElementById("regVolVal");
   if(rv){
     rv.value=REG_VOL; rvv.textContent=REG_VOL;
-    rv.addEventListener("input",()=>{ REG_VOL=parseInt(rv.value,10)||6; rvv.textContent=REG_VOL;
+    rv.addEventListener("input",()=>{ REG_VOL=parseInt(rv.value,10)||5; rvv.textContent=REG_VOL;
       try{ localStorage.setItem(REGVOL_LS,String(REG_VOL)); }catch(e){} });
     rv.addEventListener("change",()=>{ unlockAudio(); sndReg(3); setTimeout(()=>sndReg(3),500); });
   }
   const ev=document.getElementById("errVol"), evv=document.getElementById("errVolVal");
   if(ev){
     ev.value=ERR_VOL; evv.textContent=ERR_VOL;
-    ev.addEventListener("input",()=>{ ERR_VOL=parseInt(ev.value,10)||7; evv.textContent=ERR_VOL;
+    ev.addEventListener("input",()=>{ ERR_VOL=parseInt(ev.value,10)||8; evv.textContent=ERR_VOL;
       try{ localStorage.setItem(ERRVOL_LS,String(ERR_VOL)); }catch(e){} });
     ev.addEventListener("change",()=>{ unlockAudio(); errSound(); });
   }
@@ -1700,7 +1702,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.13";
+const APP_VER="2026-09-16.14";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
