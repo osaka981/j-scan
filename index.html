@@ -434,6 +434,7 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
     <div class="ar">最初の読取　<b class="num" id="dupFirst"></b>　<span id="dupBin"></span></div>
   </div>
   <div id="dupRest"></div>
+  <div id="dupBlocked" class="hide" style="margin:8px 0 0;padding:10px;border-radius:8px;background:#A8231C;color:#FFF;font-weight:800;text-align:center;font-size:15px"></div>
   <p class="note">この読取はカウントしていません。同じ荷物を2回通したか、荷物自体が重複している可能性があります。記録は集計画面に残ります。</p>
   <button class="btn wide" id="dupAck">確認した（カウントしない）</button>
   <button class="btn wide dim hide" id="dupAckAll">まとめて確認する</button>
@@ -857,9 +858,12 @@ function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTim
 /* ★ 2026/09/16: 12桁以外の読取エラー。
    正常音（高い短音）と聞き分けられるよう「低音3回＋長い振動」にし、画面全体も赤く点滅させる。 */
 let errOpen=false, errCount=0;
-function readError(sub){
+function errSound(){
   beep(180,260,.14); setTimeout(()=>beep(180,260,.14),330); setTimeout(()=>beep(180,260,.14),660);
   buzz([400,150,400,150,400]);
+}
+function readError(sub){
+  errSound();
   const f=document.getElementById("errFlash"); if(!f) return;
   errCount = errOpen ? errCount+1 : 1;
   errOpen=true;
@@ -1477,7 +1481,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.3";
+const APP_VER="2026-09-16.4";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1730,7 +1734,17 @@ function commit(no){
   buzz(size===5?[40,40,40]:25);
   renderSoon();
 }
-let dupQ=[], dupOpen=false;
+let dupQ=[], dupOpen=false, dupBlockCnt=0;
+/* ★ 2026/09/16: 二度読みの確認画面が出ている間は、何を読んでも登録しない（確認してから読み直す） */
+function dupBlocked(){
+  dupBlockCnt++;
+  errSound();
+  const el=$("dupBlocked");
+  el.textContent="確認前に読んだ "+dupBlockCnt+" 件は登録していません。確認してから読み直してください";
+  el.classList.remove("hide");
+  setBand("dup","登録していません","二度読みの確認が先です","確認前に読んだ "+dupBlockCnt+" 件は読み直してください");
+}
+function dupBlockReset(){ dupBlockCnt=0; const el=$("dupBlocked"); if(el){ el.textContent=""; el.classList.add("hide"); } }
 function showDup(no,first){
   const now=Date.now();
   S.dupLog.push({no:no,ts:now,firstTs:first.ts,firstBin:first.bin,bin:cur().bin});
@@ -1756,7 +1770,7 @@ function paintDupRest(){
 }
 function nextDup(){
   const d=dupQ.shift();
-  if(!d){ dupOpen=false; closeSheets(); return; }
+  if(!d){ dupOpen=false; dupBlockReset(); closeSheets(); return; }
   if(locked) setLock(false);
   dupOpen=true;
   $("dupNo").textContent=fmt(d.no);
@@ -1766,8 +1780,8 @@ function nextDup(){
   paintDupRest();
   openSheet("shDup");
 }
-$("dupAck").onclick=()=>{ if(dupQ.length) nextDup(); else { dupOpen=false; closeSheets(); } };
-$("dupAckAll").onclick=()=>{ dupQ=[]; dupOpen=false; closeSheets(); };
+$("dupAck").onclick=()=>{ if(dupQ.length) nextDup(); else { dupOpen=false; dupBlockReset(); closeSheets(); } };
+$("dupAckAll").onclick=()=>{ dupQ=[]; dupOpen=false; dupBlockReset(); closeSheets(); };
 
 function setBand(cls,t,big,sub){
   const b=$("band"); b.className="band"+(cls?" "+cls:"");
@@ -2117,8 +2131,9 @@ document.addEventListener("keydown",e=>{
     // ★ 2026/09/16: 確認画面が出ている間の読取はカウントせず、もう一度警告する
     if(errOpen){ readError("確認画面が出ている間に読み取りました"); return; }
     if(gateOpen){ readError("「タップして読み取りを再開」を押してから読み直してください"); return; }
+    if(dupOpen && $("shDup").classList.contains("on")){ dupBlocked(); return; }
     // ★ 2026/09/16: 以前は他の画面を開いている間の読取を無音で捨てていた
-    if(askOpen||(sheetOpen&&!dupOpen&&!oddOpen)){ readError("画面を閉じてから読み直してください"); return; }
+    if(askOpen||(sheetOpen&&!oddOpen)){ readError("画面を閉じてから読み直してください"); return; }
     handle(code);
     if(locked) paintLock();
     return;
