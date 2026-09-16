@@ -352,23 +352,16 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <!-- ★ 2026/09/16: 音のテスト -->
   <div style="text-align:center;margin-top:14px">
     <button class="btn wide" id="btnSndTest" type="button">🔊 音のテスト</button>
-    <div style="margin-top:10px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card)">
-      <div style="font-size:13px;font-weight:700;margin-bottom:6px">音の出し方（試験中・この端末だけの設定）</div>
-      <div style="display:flex;gap:6px">
-        <button class="btn sm" type="button" data-amode="playback" style="flex:1">A 再生</button>
-        <button class="btn sm" type="button" data-amode="transient" style="flex:1">B 重ねる</button>
-        <button class="btn sm" type="button" data-amode="mixed" style="flex:1">C エラー強調</button>
-      </div>
-      <p class="note" id="amodeNote" style="margin-top:6px"></p>
-      <div style="font-size:13px;font-weight:700;margin:10px 0 4px">登録音の大きさ　<span id="regVolVal" class="num"></span> / 10</div>
-      <input id="regVol" type="range" min="1" max="10" step="1" style="width:100%">
-      <div style="font-size:13px;font-weight:700;margin:10px 0 4px">エラー音の大きさ　<span id="errVolVal" class="num"></span> / 10</div>
-      <input id="errVol" type="range" min="1" max="10" step="1" style="width:100%">
-      <button class="btn wide dim" id="btnErrTest" type="button" style="margin-top:6px">エラー音だけ鳴らす</button>
-      <button class="btn wide dim" id="btnRegTest" type="button" style="margin-top:6px">登録音（ピッ）を5回鳴らす</button>
-      <p class="note" id="asessNote" style="margin-top:6px;font-size:11px"></p>
+    <p class="note" id="sndTestNote" style="text-align:center;margin-top:6px">押すと、登録・10件区切り・登録済み・エラーなどの音を順に鳴らします。<br>聞こえない場合は、スマホの音量を確認してください。</p>
+    <!-- ★ 2026/09/16: 管理画面で許可された端末だけに表示 -->
+    <div id="drvAudioBox" class="hide" style="margin-top:10px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card)">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">入力音の設定</div>
+      <button class="btn wide" type="button" data-amode="playback">入力音のみ使用する（A）</button>
+      <p class="note" style="margin:4px 2px 8px">入力音以外の音声を聞かない場合はこちら。マナーモードでも鳴ります。</p>
+      <button class="btn wide" type="button" data-amode="mixed">入力音以外の音声も聞く</button>
+      <p class="note" style="margin:4px 2px 0">必ずマナーモードを解除してください。マナーモードのままだと入力音もエラー音も鳴りません。</p>
+      <p class="note" id="drvAudioNow" style="margin-top:8px;font-weight:700"></p>
     </div>
-    <p class="note" id="sndTestNote" style="text-align:center;margin-top:6px">押すと、登録・10件区切り・登録済み・エラーの音を順に鳴らします。<br>聞こえない場合は、スマホの音量・マナーモード・イヤホンを確認してください。</p>
   </div>
   <p class="note" id="verNote" style="text-align:center;margin-top:2px"></p>
 </div>
@@ -592,6 +585,24 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   </details>
 
   <div id="admInternal">
+    <!-- ★ 2026/09/16: この端末の音の設定（社内用） -->
+    <details id="admAudioBox" style="margin-top:10px;border:1px solid #D6DEE7;border-radius:8px;padding:8px 10px;">
+      <summary style="font-weight:700;cursor:pointer;">この端末の音の設定</summary>
+      <label style="display:flex;align-items:center;gap:8px;margin:10px 0 4px;font-size:15px;font-weight:700;cursor:pointer">
+        <input type="checkbox" id="admAudioAllow" style="width:22px;height:22px"> 音声重複（マナーモード解除要項）を許可する
+      </label>
+      <p class="note">オフ（標準）の間は、常に「A：入力音のみ」です。マナーモードでも鳴りますが、他の音声は入力のたびに止まります。<br>
+        オンにすると、この端末のドライバーが開始画面で「入力音以外の音声も聞く」を選べます（マナーモード解除が必要）。許可は対面で行ってください。</p>
+      <p class="note" id="admAudioNow" style="font-weight:700"></p>
+      <div style="font-size:13px;font-weight:700;margin:10px 0 4px">登録音の大きさ　<span id="regVolVal" class="num"></span> / 10</div>
+      <input id="regVol" type="range" min="1" max="10" step="1" style="width:100%">
+      <div style="font-size:13px;font-weight:700;margin:10px 0 4px">エラー音の大きさ　<span id="errVolVal" class="num"></span> / 10</div>
+      <input id="errVol" type="range" min="1" max="10" step="1" style="width:100%">
+      <button class="btn wide dim" id="btnRegTest" type="button" style="margin-top:8px">登録音（ピッ）を5回鳴らす</button>
+      <button class="btn wide dim" id="btnErrTest" type="button">エラー音だけ鳴らす</button>
+      <p class="note" id="asessNote" style="font-size:11px"></p>
+    </details>
+
     <h3>選択した日のデータ</h3>
     <button class="btn wide danger" id="btnWipeToday">この日のデータを全消去する</button>
     <p class="note">テストで作った便を片付けるためのものです。上で選んだ日の便・読取・記録・写真が、全端末分すべて消えます。</p>
@@ -998,34 +1009,42 @@ function soundTest(){
   ];
   seq.forEach(([t,label,fn])=>sndTestT.push(setTimeout(()=>{ if(note) note.textContent=label; fn(); },t)));
 }
-const AMODE_DESC={
-  playback:"A：マナーモードでも鳴る想定。音楽を流していると、音楽が止まることがあります。",
-  transient:"B：音楽の上に重ねて鳴らします。音楽が小さくなるか、マナーモードで鳴るかを確認してください。",
-  mixed:"C：普段は B。エラー音のときだけ音楽を止めて（消して）エラー音を強調し、終わったら戻します。"
-};
+const AMODE_NAME={playback:"A：入力音のみ（マナーモードでも鳴る）",mixed:"入力音以外の音声も聞く（マナーモード解除が必要）"};
+function setAmode(v,withSound){
+  AMODE=(v==="mixed"&&audioAllowed())?"mixed":"playback";
+  try{ localStorage.setItem(AMODE_LS,AMODE); }catch(e){}
+  soloOn=false; clearTimeout(soloT);
+  if(AC){ try{ AC.close(); }catch(e){} AC=null; }   // 種類を変えたら音を作り直す（タップ中に行う）
+  audioSessionApply();
+  if(withSound){ unlockAudio(); beep(880,90); }
+  paintAmode();
+}
 function paintAmode(){
+  const allow=audioAllowed();
+  const box=document.getElementById("drvAudioBox");
+  if(box) box.className=allow?"":"hide";
+  if(box) box.style.cssText=allow?"margin-top:10px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card)":"";
   document.querySelectorAll("[data-amode]").forEach(b=>{
-    const on=b.getAttribute("data-amode")===AMODE;
-    b.className="btn sm"+(on?"":" dim");
+    b.className="btn wide"+(b.getAttribute("data-amode")===AMODE?"":" dim");
   });
-  const n=document.getElementById("amodeNote"); if(n) n.textContent=AMODE_DESC[AMODE]||"";
+  const now="現在："+(AMODE_NAME[AMODE]||"");
+  const d=document.getElementById("drvAudioNow"); if(d) d.textContent=now;
+  const chk=document.getElementById("admAudioAllow"); if(chk) chk.checked=allow;
+  const an=document.getElementById("admAudioNow"); if(an) an.textContent="この端末の"+now;
   const a=document.getElementById("asessNote");
   if(a){
     const as=navigator.audioSession;
-    a.textContent=as?("この端末：音の種類の切替に対応（現在 "+as.type+" / "+as.state+"）")
-                    :"この端末：音の種類の切替に対応していません（iOS 16.4 未満、または Android など）";
+    a.textContent=as?("端末の状態：音の種類の切替に対応（"+as.type+" / "+as.state+"）")
+                    :"端末の状態：音の種類の切替に対応していません（iOS 16.4 未満、Android など）";
   }
 }
 document.addEventListener("DOMContentLoaded",()=>{
-  document.querySelectorAll("[data-amode]").forEach(b=>b.addEventListener("click",()=>{
-    AMODE=b.getAttribute("data-amode");
-    try{ localStorage.setItem(AMODE_LS,AMODE); }catch(e){}
-    soloOn=false; clearTimeout(soloT);
-    // 種類を変えたら音を作り直す（タップ中に行う）
-    if(AC){ try{ AC.close(); }catch(e){} AC=null; }
-    audioSessionApply(); unlockAudio(); beep(880,90);
-    setTimeout(paintAmode,200); paintAmode();
-  }));
+  document.querySelectorAll("[data-amode]").forEach(b=>b.addEventListener("click",()=>setAmode(b.getAttribute("data-amode"),true)));
+  const chk=document.getElementById("admAudioAllow");
+  if(chk) chk.addEventListener("change",()=>{
+    try{ localStorage.setItem(AALLOW_LS,chk.checked?"1":"0"); }catch(e){}
+    if(!chk.checked) setAmode("playback",true); else paintAmode();
+  });
   const rv=document.getElementById("regVol"), rvv=document.getElementById("regVolVal");
   if(rv){
     rv.value=REG_VOL; rvv.textContent=REG_VOL;
@@ -1044,6 +1063,8 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(e) e.addEventListener("click",()=>{ unlockAudio(); errSound(); setTimeout(paintAmode,300); });
   const r=document.getElementById("btnRegTest");
   if(r) r.addEventListener("click",()=>{ unlockAudio(); for(let i=0;i<5;i++) setTimeout(()=>sndReg(3),i*700); setTimeout(paintAmode,300); });
+  const ab=document.getElementById("admAudioBox");
+  if(ab) ab.addEventListener("toggle",paintAmode);
   paintAmode();
   const b=document.getElementById("btnSndTest");
   if(b) b.addEventListener("click",()=>{ unlockAudio(); soundTest(); });
@@ -1083,8 +1104,19 @@ document.addEventListener("DOMContentLoaded",()=>{
    A playback  : マナーモードでも鳴る想定。ただし流れている音楽が止まることがある（今までの設定）
    B transient : 通知音として音楽の上に重ねて鳴らす。音楽が小さくなることがある
    C mixed     : 普段は B、エラー音のときだけ transient-solo（音楽を止めて／消してエラー音を強調し、終わったら戻す） */
-const AMODE_LS="jet-audio-mode";
-let AMODE=(()=>{ try{ return localStorage.getItem(AMODE_LS)||"mixed"; }catch(e){ return "mixed"; } })();
+/* ★ 2026/09/16 運用決定:
+   標準は A（playback：入力音のみ。マナーモードでも鳴る）。
+   管理画面（社内用）で端末ごとに「音声重複（マナーモード解除要項）」を許可したときだけ、
+   ドライバーが開始画面で C（他の音声と併用。マナーモード解除が必要）を選べる。
+   設定はこの端末にだけ保存される。 */
+const AMODE_LS="jet-audio-mode", AALLOW_LS="jet-audio-allow";
+try{ if(localStorage.getItem("jet-amode-std2")!=="1"){ localStorage.removeItem(AMODE_LS); localStorage.removeItem(AALLOW_LS); localStorage.setItem("jet-amode-std2","1"); } }catch(e){}
+const audioAllowed=()=>{ try{ return localStorage.getItem(AALLOW_LS)==="1"; }catch(e){ return false; } };
+function loadAmode(){
+  if(!audioAllowed()) return "playback";
+  try{ const v=localStorage.getItem(AMODE_LS); return v==="mixed"?"mixed":"playback"; }catch(e){ return "playback"; }
+}
+let AMODE=loadAmode();
 let soloT=null, soloOn=false;
 function baseType(){ return AMODE==="playback"?"playback":"transient"; }
 function setSessionType(t){
@@ -1702,7 +1734,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.14";
+const APP_VER="2026-09-16.15";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
