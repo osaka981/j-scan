@@ -288,6 +288,31 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <button class="btn wide" id="btnFinish">業務終了</button>
   <button class="btn wide dim" id="btnAdmin">管理画面</button>
   <p class="note" id="postNote" style="text-align:center;margin-top:12px"></p>
+  <!-- ★ 2026/09/16: 端末アカウント（IDとパスワード）。日報アプリと同じ仕組み。
+       この端末がどの会社のものかを決めるだけで、日々の操作には関係しない。
+       ドライバーが毎日見る画面なので、既定では小さな1行だけにしてたたむ。
+       顧客用URL(?c=)では出さない（顧客には関係がない）。 -->
+  <div id="devAcctWrap" class="hide" style="text-align:center;margin-top:14px">
+    <span id="devAcctLine" style="font-size:11px;color:#7E8A97;cursor:pointer;
+          border-bottom:1px dotted #7E8A97;padding-bottom:1px">端末の設定</span>
+  </div>
+  <div id="devAcctForm" class="hide" style="margin-top:10px">
+    <div class="metabox">
+      <div style="font-size:13px;font-weight:700;margin-bottom:2px">この端末のアカウント</div>
+      <div style="font-size:11px;color:#7E8A97;margin-bottom:8px" id="devAcctState">未設定</div>
+      <div id="devAcctInputs">
+        <div class="field"><label for="devAcctId">ID</label>
+          <input id="devAcctId" type="email" autocomplete="username" placeholder="xxxxxxxx@work.local"></div>
+        <div class="field"><label for="devAcctPw">パスワード</label>
+          <input id="devAcctPw" type="password" autocomplete="current-password"></div>
+        <p class="note" id="devAcctErr" style="color:#A8231C"></p>
+        <button class="btn wide" id="btnDevAcctLogin">ログイン</button>
+        <p class="note">大阪急配から配布されたIDとパスワードを入力してください。<br>
+          最初の1回だけ電波のある場所で行ってください。以後は不要です。</p>
+      </div>
+      <button class="btn wide dim" id="btnDevAcctToggle">閉じる</button>
+    </div>
+  </div>
   <p class="note" id="verNote" style="text-align:center;margin-top:2px"></p>
 </div>
 
@@ -926,6 +951,123 @@ loadSettings();
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") loadSettings(); });
 window.addEventListener("online",()=>loadSettings());
 setInterval(loadSettings,10*60*1000);
+
+/* ══ ★ 2026/09/16: 端末アカウント ══
+   この端末がどの会社のものかを、IDとパスワードで決める。
+   ログイン状態は端末に保存されるので、2回目以降はオフラインでも復元される。
+   誰が計数するかは、これまで通り社員番号で決める（1台を交代で使う場合に
+   オフラインでも人を替えられるようにするため）。
+   顧客アカウント(@scan.local)とはドメインを分けているので、
+   通常URLで顧客ログインを解除する処理には引っかからない。 */
+const DEVACCT_LS="jscan_device_acct";
+function devAcctGet(){
+  try{ const v=JSON.parse(localStorage.getItem(DEVACCT_LS)||"null"); return (v&&v.uid)?v:null; }
+  catch(e){ return null; }
+}
+function devAcctSet(v){
+  try{ v ? localStorage.setItem(DEVACCT_LS,JSON.stringify(v)) : localStorage.removeItem(DEVACCT_LS); }catch(e){}
+}
+function devAcctPaint(){
+  const wrap=$("devAcctWrap");
+  // 顧客用URLでは出さない
+  if(wrap) wrap.className = isCustMode() ? "hide" : "";
+  const a=devAcctGet();
+  const label = a
+    ? (a.companyName||"(会社未設定)") + (a.kind==="person" && a.staffName ? " / "+a.staffName : " / 端末で共用")
+    : "未設定";
+  const st=$("devAcctState");
+  if(st){ st.textContent=label; st.style.color = a ? "#1D6B45" : "#7E8A97"; }
+  const line=$("devAcctLine");
+  if(line){
+    line.textContent = a ? ("この端末: "+label) : "端末の設定";
+    line.style.color = a ? "#1D6B45" : "#7E8A97";
+  }
+  const inp=$("devAcctInputs"), btn=$("btnDevAcctToggle");
+  if(inp) inp.className = a ? "hide" : "";
+  if(btn) btn.textContent = a ? "この端末のアカウントを解除" : "閉じる";
+}
+function devAcctToggle(){
+  const a=devAcctGet(), f=$("devAcctForm");
+  if(a && f && f.className!=="hide"){
+    ask({title:"この端末のアカウントを解除します",
+      body:"解除すると、次に使うときは電波のある場所でIDとパスワードの入力が必要です。",
+      okText:"解除する", danger:true, onOk:async ()=>{ await devAcctLogout(); if(f) f.className="hide"; }});
+    return;
+  }
+  if(f) f.className = (f.className==="hide") ? "" : "hide";
+  devAcctPaint();
+  if(f && f.className!=="hide" && !a) setTimeout(()=>$("devAcctId")&&$("devAcctId").focus(),80);
+}
+async function devAcctLogin(){
+  const fns=window._fbAuthFns||{}, auth=window._fbAuth;
+  const email=($("devAcctId").value||"").trim();
+  const pw=$("devAcctPw").value||"";
+  const err=$("devAcctErr");
+  const setErr=m=>{ if(err) err.textContent=m; };
+  setErr("");
+  if(!email||!pw){ setErr("IDとパスワードを入力してください"); return; }
+  if(!fns.signInWithEmailAndPassword||!auth){ setErr("通信の準備ができていません。少し待ってからお試しください"); return; }
+  const btn=$("btnDevAcctLogin");
+  if(btn){ btn.disabled=true; btn.textContent="確認中"; }
+  try{
+    const cred=await fns.signInWithEmailAndPassword(auth,email,pw);
+    const uid=cred.user.uid;
+    // 権限表からこの端末の所属を読む
+    let rec=null;
+    try{
+      const r=await fbFetch(FB_URL+"/nikki/_acl/user/"+encodeURIComponent(uid)+".json");
+      if(r.ok){ const v=await r.json(); if(v && !v.error) rec=v; }
+    }catch(e){}
+    if(!rec){ setErr("このIDは登録されていません。大阪急配へご連絡ください");
+      try{ await fns.signOut(auth); }catch(e){} return; }
+    if(rec.active===false){ setErr("このIDは停止されています。大阪急配へご連絡ください");
+      try{ await fns.signOut(auth); }catch(e){} return; }
+    devAcctSet({ uid, email, kind:rec.kind||"company",
+      companyId:rec.companyId||"", companyName:rec.companyName||"",
+      staffUid:rec.staffUid||"", staffName:rec.staffName||"", at:Date.now() });
+    $("devAcctPw").value="";
+    devAcctPaint();
+    /* ★ ユーザーが変わるとトークンも変わる。顧客マスタとドライバー名簿を
+       読み直さないと、前のトークンで取った内容のまま表示が残る。 */
+    try{ await loadJetCusts(); }catch(e){}
+    try{ await loadMaster(); }catch(e){}
+    try{ paintCustSelect(); }catch(e){}
+    notify("この端末を設定しました",(rec.companyName||"会社")+" として記録されます。");
+  }catch(e){
+    const c=(e&&e.code)||"";
+    setErr(
+      /wrong-password|invalid-credential/.test(c) ? "IDまたはパスワードが違います" :
+      /user-not-found/.test(c) ? "このIDは存在しません" :
+      /too-many-requests/.test(c) ? "試行が多すぎます。しばらく待ってからお試しください" :
+      /network/.test(c) ? "通信できません。電波のある場所でお試しください" :
+      "ログインできませんでした");
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent="ログイン"; }
+  }
+}
+async function devAcctLogout(){
+  const fns=window._fbAuthFns||{}, auth=window._fbAuth;
+  devAcctSet(null);
+  try{ if(fns.signOut&&auth) await fns.signOut(auth); }catch(e){}
+  devAcctPaint();
+  try{ await loadJetCusts(); }catch(e){}
+  try{ paintCustSelect(); }catch(e){}
+  notify("端末のアカウントを解除しました","");
+}
+/* ★ 2026/09/16: 端末アカウントの会社と、入力したIDの人の会社が食い違っていたら
+   集荷を始めさせない。委託会社の端末で自社のドライバーが計数すると、
+   第2段階でルールが会社ごとに絞ったときに読めないデータができてしまう。 */
+function devAcctAllows(d){
+  const a=devAcctGet();
+  if(!a||!a.companyId) return true;
+  const dc=String((d&&d.companyId)||"");
+  if(dc===String(a.companyId)) return true;
+  notify("この端末では始められません",
+    ((d&&d.name)||"この方")+" は "+(a.companyName||"この会社")+" の所属ではありません。\n"+
+    "この端末は "+(a.companyName||"")+" 用に設定されています。\n"+
+    "別の会社の方が使う場合は、端末のアカウントを解除してください。");
+  return false;
+}
 
 /* ---------- ID照合（日報アプリの登録データ） ---------- */
 const FB_URL="https://osq-report-3db91-default-rtdb.asia-southeast1.firebasedatabase.app";
@@ -1604,6 +1746,13 @@ $("btnFinish").onclick=()=>{
 });
 
 $("btnStart").onclick=()=>{
+  /* ★ 2026/09/16: 端末アカウントの会社と、入力したIDの人の会社が
+     食い違っていたら始めさせない（委託会社の端末で自社の人が計数すると、
+     第2段階でルールが絞ったときに読めないデータになる）。 */
+  try{
+    const _d=findDriver($("sId")?.value);
+    if(_d && !devAcctAllows(_d)) return;
+  }catch(e){}
   // ★ 2026/09/12: どの顧客の計数かを先に確定する。便ごとに顧客を持たせる。
   const list=custsForId($("sId")?.value);
   const _sel=String($("sCust")?.value||"");
@@ -2875,6 +3024,13 @@ if(_admCustSel) _admCustSel.onchange=function(){
 };
 $("admDate").onchange=function(){ admDate=this.value||S.date; this.blur(); renderAdmin(); };
 $("admDate").addEventListener("click",function(){ try{ if(this.showPicker&&!("ontouchstart" in window)) this.showPicker(); }catch(e){} });
+// ★ 2026/09/16: 端末アカウントの結線
+const _btnDevToggle=$("btnDevAcctToggle"), _lineDev=$("devAcctLine"), _btnDevLogin=$("btnDevAcctLogin");
+if(_btnDevToggle) _btnDevToggle.onclick=devAcctToggle;
+if(_lineDev)      _lineDev.onclick=devAcctToggle;
+if(_btnDevLogin)  _btnDevLogin.onclick=devAcctLogin;
+try{ devAcctPaint(); }catch(e){}
+
 // ★ 2026/09/12: 顧客自身による暗証番号の変更。
 //   保存するのはハッシュだけなので、番号そのものはどこにも残らない。
 const _btnPinChange=$("btnPinChange");
