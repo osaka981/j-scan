@@ -349,6 +349,11 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <button class="btn wide dim" id="btnDevAcctToggle">閉じる</button>
     </div>
   </div>
+  <!-- ★ 2026/09/16: 音のテスト -->
+  <div style="text-align:center;margin-top:14px">
+    <button class="btn wide" id="btnSndTest" type="button">🔊 音のテスト</button>
+    <p class="note" id="sndTestNote" style="text-align:center;margin-top:6px">押すと、登録・10件区切り・登録済み・エラーの音を順に鳴らします。<br>聞こえない場合は、スマホの音量・マナーモード・イヤホンを確認してください。</p>
+  </div>
   <p class="note" id="verNote" style="text-align:center;margin-top:2px"></p>
 </div>
 
@@ -857,20 +862,52 @@ function findFirst(no){
 }
 
 let AC=null;
-function beep(freq,ms,vol){
+/* ★ 2026/09/16: 音量を最大出力にした（以前は最大の1割前後）。
+   音が割れないよう、出口に「音量を整える処理（コンプレッサー）」を入れる。
+   立ち上がり・終わりを数ミリ秒なめらかにして、プツッという雑音も防ぐ。 */
+const SND_MASTER=1.0;            // 全体の音量（1.0 = 最大）。大きすぎる場合はここを下げる
+let OUT=null, OUT_AC=null;
+function sndOut(){
+  if(OUT && OUT_AC===AC) return OUT;
+  const comp=AC.createDynamicsCompressor();
+  comp.threshold.value=-10; comp.knee.value=6; comp.ratio.value=12;
+  comp.attack.value=0.002; comp.release.value=0.12;
+  const master=AC.createGain(); master.gain.value=SND_MASTER;
+  comp.connect(master); master.connect(AC.destination);
+  OUT=comp; OUT_AC=AC; return OUT;
+}
+function tone(freq,ms,type,level){
+  const t0=AC.currentTime, dur=ms/1000;
+  const o=AC.createOscillator(), g=AC.createGain();
+  o.type=type||"square"; o.frequency.value=freq;
+  const peak=level||0.9;
+  g.gain.setValueAtTime(0.0001,t0);
+  g.gain.linearRampToValueAtTime(peak,t0+0.004);
+  g.gain.setValueAtTime(peak,t0+Math.max(0.005,dur-0.008));
+  g.gain.linearRampToValueAtTime(0.0001,t0+dur);
+  o.connect(g); g.connect(sndOut());
+  o.start(t0); o.stop(t0+dur+0.02);
+  o.onended=()=>{ try{o.disconnect();g.disconnect();}catch(e){} };
+}
+function beep(freq,ms,vol,type){
   try{
     AC=AC||new (window.AudioContext||window.webkitAudioContext)();
-    // ★ 2026/09/16: iPhone ではアプリを離れて戻ると "interrupted" になり鳴らなくなる。
-    //   "suspended" 以外でも再開を試みる。
+    // iPhone ではアプリを離れて戻ると "interrupted" になり鳴らなくなるため、再開を試みる
     if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
-    const o=AC.createOscillator(),g=AC.createGain();
-    o.type="square";o.frequency.value=freq;g.gain.value=vol||.07;
-    o.connect(g);g.connect(AC.destination);o.start();
-    setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},ms);
+    tone(freq,ms,type||"square",0.9);      // vol は使わず常に最大出力
+  }catch(e){}
+}
+/* エラー音用：少しずらした2つの音を重ねて「ブー」と濁った耳障りな音にする（スマホのスピーカーでも出る高さ） */
+function harsh(ms){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
+    tone(470,ms,"sawtooth",0.6);
+    tone(505,ms,"square",0.6);
   }catch(e){}
 }
 const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
-function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTimeout(()=>beep(210,380,.1),960); buzz([250,120,250,120,250]); }
+function alarm(){ harsh(300); setTimeout(()=>harsh(300),380); setTimeout(()=>harsh(300),760); buzz([400,150,400,150,400]); }
 
 /* ★ 2026/09/16: 音の一覧（現場用の説明書と同じ内容）
    登録 3cm      … ピッ（短い高音）＋短い振動
@@ -904,11 +941,34 @@ function paintRR(){
   b.textContent=rr.on?("読み直し中　"+rrLine()+"　［終了］"):"ケース読み直しモード（オフ）";
 }
 
+/* ★ 2026/09/16: 音のテスト */
+let sndTestT=[];
+function soundTest(){
+  sndTestT.forEach(clearTimeout); sndTestT=[];
+  const note=document.getElementById("sndTestNote");
+  const seq=[
+    [0,   "登録（3cm）：ピッ",            ()=>sndReg(3)],
+    [1200,"登録（5cm）：ピーッ",          ()=>sndReg(5)],
+    [2400,"10件区切り：ピッ↗ピーン",      ()=>sndTick()],
+    [3800,"登録済み：ポポ",               ()=>sndKnown()],
+    [5000,"漏れ発見：ピロリン",           ()=>sndFound()],
+    [6400,"エラー：ブッブッブッ",         ()=>errSound()],
+    [8000,"番号帯ちがい：ピポピポ",       ()=>alarmOdd()],
+    [9600,"画面から戻った：ボッボッ",     ()=>{ beep(620,180); setTimeout(()=>beep(620,180),260); }],
+    [10800,"テスト終了。すべて聞こえましたか？",()=>{}]
+  ];
+  seq.forEach(([t,label,fn])=>sndTestT.push(setTimeout(()=>{ if(note) note.textContent=label; fn(); },t)));
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  const b=document.getElementById("btnSndTest");
+  if(b) b.addEventListener("click",()=>{ unlockAudio(); soundTest(); });
+});
+
 /* ★ 2026/09/16: 12桁以外の読取エラー。
    正常音（高い短音）と聞き分けられるよう「低音3回＋長い振動」にし、画面全体も赤く点滅させる。 */
 let errOpen=false, errCount=0;
 function errSound(){
-  beep(180,260,.14); setTimeout(()=>beep(180,260,.14),330); setTimeout(()=>beep(180,260,.14),660);
+  harsh(260); setTimeout(()=>harsh(260),330); setTimeout(()=>harsh(260),660);
   buzz([400,150,400,150,400]);
 }
 function readError(sub){
@@ -1514,7 +1574,7 @@ function openGate(){
     "この便の件数：3cm "+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"\n"+
     "数が合わない場合は、その間に通した分を読み直してください。";
   document.getElementById("resumeGate").classList.add("on");
-  if(!gateOpen){ beep(300,180,.08); setTimeout(()=>beep(300,180,.08),260); buzz([150,100,150]); }
+  if(!gateOpen){ beep(620,180,.08); setTimeout(()=>beep(620,180,.08),260); buzz([150,100,150]); }
   gateOpen=true;
   refocus();
 }
@@ -1539,7 +1599,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.7";
+const APP_VER="2026-09-16.9";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1729,22 +1789,48 @@ $("oddKeep").onclick=()=>{
   if(oddCur){ const h=headOf(oddCur.no);
     oddQ=oddQ.filter(d=>{ if(headOf(d.no)===h){ markOdd(d.no,true); return false; } return true; }); }
   saveSoon();
-  if(oddQ.length) nextOdd(); else { oddOpen=false; closeSheets(); renderSoon(); }
+  if(oddQ.length) nextOdd(); else { oddOpen=false; closeSheets(); forceRepaint(); }
 };
 $("oddKeepAll").onclick=()=>{
   if(oddCur) addOkHead(headOf(oddCur.no));
   oddQ.forEach(d=>{ markOdd(d.no,true); addOkHead(headOf(d.no)); });
   oddQ=[]; oddOpen=false; saveSoon(); closeSheets(); renderSoon();
 };
+/* ★ 2026/09/16 修正: 「対象外」を押した時点で履歴から消えたことが見えるよう、
+   確認画面を閉じたあとに描画し直す（iPhone では重なった画面の下の一覧が更新されて見えないことがある）。
+   便をまたいでさかのぼり検出した番号も、その便から取り除く。 */
+function forceRepaint(){
+  render();
+  requestAnimationFrame(()=>{
+    const lw=document.querySelector(".listwrap");
+    if(lw){ lw.style.transform="translateZ(0)"; void lw.offsetHeight; lw.style.transform=""; }
+    render();
+  });
+}
 $("oddDrop").onclick=()=>{
+  let dropped=null;
   if(oddCur){
-    const sh=cur();
-    const x=sh&&sh.scans.find(v=>v.no===oddCur.no);
-    if(x){ removeScans([x],"対象外（番号帯ちがい）"); }
-    markOdd(oddCur.no,false);
+    const no=oddCur.no;
+    const sh=S.shifts.find(v=>!v.closed&&(v.scans||[]).some(y=>y.no===no)) || cur();
+    const x=sh&&sh.scans.find(v=>v.no===no);
+    if(x){
+      if(sh===cur()) removeScans([x],"対象外（番号帯ちがい）");
+      else{
+        const now=Date.now();
+        S.delLog.push({no:x.no,size:x.size,ts:x.ts,delTs:now,bin:sh.bin,driver:sh.driver,kind:"対象外（番号帯ちがい）"});
+        sh.scans=sh.scans.filter(v=>v.no!==no);
+        sh.c3=sh.scans.filter(v=>v.size===3).length; sh.c5=sh.scans.length-sh.c3;
+        seenIdx=null; save(); markDirty(sh);
+      }
+      dropped=no;
+    }
+    markOdd(no,false);
   }
   saveSoon();
   if(oddQ.length) nextOdd(); else { oddOpen=false; closeSheets(); }
+  if(dropped&&inScan()) setBand("warn","対象外にしました（数えていません）",fmt(dropped),"この便 "+cur().scans.length+"件");
+  beep(880,70,.05);
+  forceRepaint();
 };
 
 /* ---------- 読取 ---------- */
@@ -2072,7 +2158,7 @@ $("btnDelAll").onclick=()=>{
     ask({title:"選択した "+items.length+"件 を削除します",body:"削除の記録には残ります。",okText:"削除する",danger:true,
       onOk:()=>{ removeScans(items,"選択削除"); selMode=false;
         setBand("",items.length+"件を削除しました","","この便 "+sh.scans.length+"件");
-        beep(300,200,.08); buzz([120,80,120]); render(); }});
+        beep(620,200,.08); buzz([120,80,120]); render(); }});
   }else{
     if(!sh.scans.length) return;
     const n=sh.scans.length;
@@ -2081,7 +2167,7 @@ $("btnDelAll").onclick=()=>{
       onOk:()=>{ ask({title:"本当に全件削除しますか",body:n+"件が消えます。",okText:"削除を実行する",danger:true,
         onOk:()=>{ removeScans(sh.scans.slice(),"全件削除");
           setBand("warn","全件削除しました","","この便 0件。最初から読み直してください");
-          beep(300,200,.08); buzz([120,80,120]); }}); }});
+          beep(620,200,.08); buzz([120,80,120]); }}); }});
   }
 };
 function callPost(){
@@ -2144,7 +2230,7 @@ let lockWarnT=null;
 function notifyLocked(){
   if(lockWarnT) return;
   $("lockBreak").textContent="ロック中です。読み取っていません";
-  beep(300,180,.08); buzz([100,80,100]);
+  beep(620,180,.08); buzz([100,80,100]);
   lockWarnT=setTimeout(()=>{ lockWarnT=null; paintLock(); },2500);
 }
 (function(){
