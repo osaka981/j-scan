@@ -842,7 +842,9 @@ let AC=null;
 function beep(freq,ms,vol){
   try{
     AC=AC||new (window.AudioContext||window.webkitAudioContext)();
-    if(AC.state==="suspended")AC.resume();
+    // ★ 2026/09/16: iPhone ではアプリを離れて戻ると "interrupted" になり鳴らなくなる。
+    //   "suspended" 以外でも再開を試みる。
+    if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
     const o=AC.createOscillator(),g=AC.createGain();
     o.type="square";o.frequency.value=freq;g.gain.value=vol||.07;
     o.connect(g);g.connect(AC.destination);o.start();
@@ -881,17 +883,30 @@ document.addEventListener("DOMContentLoaded",()=>{
 try{ if(navigator.audioSession) navigator.audioSession.type="playback"; }catch(e){}
 
 /* ---------- 音の初期化（iOS対策） ---------- */
+/* ★ 2026/09/16 修正: 以前は最初の1回のタッチでしか音を有効にしていなかったため、
+   アプリを離れて戻ると（iPhone で音の再生が中断され）以後ずっと鳴らなくなっていた。
+   タッチのたびに状態を確認し、止まっていれば作り直して有効にする（タッチ中でないと有効にできないため）。 */
 function unlockAudio(){
   try{
+    audioSessionPlayback();
+    if(AC && AC.state!=="running"){
+      try{ AC.resume(); }catch(e){}
+      // 中断・終了した音声は再開できないことがあるので、タッチ中に新しく作り直す
+      if(AC.state==="closed"||AC.state==="interrupted"){ try{ AC.close(); }catch(e){} AC=null; }
+    }
+    if(AC && AC.state==="running") return;
     AC=AC||new (window.AudioContext||window.webkitAudioContext)();
-    if(AC.state==="suspended")AC.resume();
+    if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
     const o=AC.createOscillator(),g=AC.createGain();
     g.gain.value=0.0001;o.connect(g);g.connect(AC.destination);o.start();
     setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},40);
   }catch(e){}
 }
-document.addEventListener("touchstart",unlockAudio,{once:true});
-document.addEventListener("mousedown",unlockAudio,{once:true});
+function audioSessionPlayback(){
+  try{ if(navigator.audioSession && navigator.audioSession.type!=="playback") navigator.audioSession.type="playback"; }catch(e){}
+}
+["touchend","mousedown","click","keydown"].forEach(ev=>document.addEventListener(ev,unlockAudio,true));
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="visible") audioSessionPlayback(); });
 
 /* ---------- 共有設定（発信先など。Firebase nikki/jet_settings） ---------- */
 /* ★ 2026/09/13: 宣言をファイル前方へ移した。
@@ -1444,8 +1459,10 @@ function openGate(){
 function closeGate(){
   gateOpen=false; awayAt=0;
   document.getElementById("resumeGate").classList.remove("on");
+  if(AC && AC.state!=="running"){ try{ AC.close(); }catch(e){} AC=null; }   // タップ中に作り直す
+  unlockAudio();
   refocus();
-  beep(880,70,.05);
+  setTimeout(()=>beep(880,90,.06),60);   // 音が戻ったことの確認音
 }
 window.addEventListener("blur",markAway);
 window.addEventListener("pagehide",markAway);
@@ -1460,7 +1477,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.1";
+const APP_VER="2026-09-16.2";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
