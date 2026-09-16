@@ -2303,7 +2303,15 @@ function download(name,text){
 /* ---------- 提出用CSV ---------- */
 const ORG="osakakyuhai";
 const SUBHEAD="日付,便,ドライバー,サイズcm,お問い合わせ番号,読取時刻\n";
+/* ★ 2026/09/16: 提出用CSVは顧客へ渡すものなので、画面に出している
+   締め時刻順の通し番号に合わせる。端末ごとの便名のままだと、
+   同じ日に「第1便」のファイルが何本もできてしまう。
+   社内用CSV（照合用）は端末の便名のままにして、どの端末のどの便かを
+   追えるようにしておく。 */
 function binNo(day,sh){
+  const _o=_binOrderMap(day.shifts||[]);
+  const i=_o.get(keyOf(sh));
+  if(i) return String(i);
   const m=String(sh.bin).match(/(\d+)/);
   if(m) return m[1];
   return String(day.shifts.indexOf(sh)+1);
@@ -2311,9 +2319,12 @@ function binNo(day,sh){
 const ymd=d=>String(d).replace(/-/g,"");
 function csvSubmit(day,shifts){
   let out=SUBHEAD;
+  // ★ 2026/09/16: 画面と同じ締め時刻順の通し番号で書き出す
+  const _o=_binOrderMap(day.shifts||[]);
   shifts.forEach(sh=>{
+    const _bin=_binLabel(sh,_o);
     (Array.isArray(sh.scans)?sh.scans:[]).forEach(x=>{
-      out+=[day.date,sh.bin,sh.driver,x.size,x.no,hms(x.ts)].join(",")+"\n";
+      out+=[day.date,_bin,sh.driver,x.size,x.no,hms(x.ts)].join(",")+"\n";
     });
   });
   return out;
@@ -2936,6 +2947,29 @@ function corpBreakdown(day){
     Array.from(m.entries()).map(([k,v])=>
       '<div style="font-size:14px">'+k+"　"+v.n+"便　"+v.q+"個</div>").join("");
 }
+/* ★ 2026/09/16: 便名は端末ごと（ドライバーごと）に採番しているため、
+   同じ日に「第1便」が何人分も並ぶ。顧客から見ると分かりにくいので、
+   顧客の画面では締めた時刻の順に第1便・第2便…と振り直して表示する。
+   実データの bin / binNo は変更しない（オフラインで採番する仕組みは
+   そのままにしないと、電波の無い現場で集荷を始められなくなるため）。
+   同時刻だったときに並びが揺れないよう、締め時刻 → 開始時刻 →
+   端末とキーの文字列、の順で必ず一意に決まるようにする。
+   未締めの便は順番を決められないので振り直さず、元の便名のままにする。 */
+function _binOrderMap(shifts){
+  const m=new Map();
+  const closed=(shifts||[]).filter(sh=>sh && sh.closed && sh.closedAt);
+  closed.sort((a,b)=>
+    (a.closedAt-b.closedAt) ||
+    ((a.startedAt||0)-(b.startedAt||0)) ||
+    String(keyOf(a)).localeCompare(String(keyOf(b))));
+  closed.forEach((sh,i)=>m.set(keyOf(sh), i+1));
+  return m;
+}
+function _binLabel(sh, orderMap){
+  const noIdx = orderMap && orderMap.get(keyOf(sh));
+  return noIdx ? ("第"+noIdx+"便") : (sh.bin||"");
+}
+
 function renderAdmin(){
   paintAdminDay(buildLocalDay(admDate),false);
   const want=admDate;
@@ -2961,13 +2995,15 @@ function paintAdminDay(day,remoteLoaded){
   $("sumCard").onclick=()=>openDayDetail(day);
 
   const ends=isStaff?(day.ends||[]):[];
+  // ★ 2026/09/16: 顧客の画面は締め時刻順の通し番号。社内は端末の便名のまま。
+  const _ord = isStaff ? null : _binOrderMap(day.shifts);
   $("admList").innerHTML=(day.shifts.length?day.shifts.map((sh,i)=>{
     const c=cnt(sh);
     const bad=sh.closed?(sh.exportedAt?'<span class="badge b-done">書き出し済 '+hhmm(sh.exportedAt)+"</span>":'<span class="badge b-todo">未書き出し</span>')
                        :'<span class="badge b-open">計数中</span>';
     const callBtn=(isStaff&&sh.tel)?' <a class="btn sm" style="padding:4px 10px;margin-left:6px;text-decoration:none;color:var(--blue);border-color:#8FB4D8;background:var(--blue-bg)" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'" onclick="event.stopPropagation()">発信</a>':"";
     const pick=isStaff?'<input type="checkbox" class="pick" data-k="'+keyOf(sh)+'" onclick="event.stopPropagation()" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px">':"";
-    return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+pick+sh.bin+"　"+(sh.driver||"")+callBtn+"</div>"+
+    return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+pick+_binLabel(sh,_ord)+"　"+(sh.driver||"")+callBtn+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
       ((sh.carrierName&&sh.carrierName!==sh.driver)?"　<b style='color:#8A4B00'>運搬 "+sh.carrierName+"</b>":"")+
       (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+
@@ -3150,7 +3186,10 @@ function openDayDetail(day){
   $("detMeta").innerHTML='<div class="metabox">'+
     '<div style="font-size:20px;font-weight:800">3cm '+t3+"　5cm "+t5+"　計 "+(t3+t5)+"</div>"+
     '<div style="font-size:14px;margin-top:4px">便数 '+day.shifts.length+"</div>"+
-    day.shifts.map(sh=>{ const c=cnt(sh); return '<div style="font-size:13px;color:#4A5B6B;margin-top:2px">'+sh.bin+"　"+(sh.driver||"")+"　"+(c.a+c.b)+"個</div>"; }).join("")+
+    (function(){ // ★ 2026/09/16: 顧客の画面は締め時刻順の通し番号
+      const _o = isStaff ? null : _binOrderMap(day.shifts);
+      return day.shifts.map(sh=>{ const c=cnt(sh); return '<div style="font-size:13px;color:#4A5B6B;margin-top:2px">'+_binLabel(sh,_o)+"　"+(sh.driver||"")+"　"+(c.a+c.b)+"個</div>"; }).join("");
+    })()+
     "</div>";
   $("detSearch").value="";
   $("detScans").innerHTML='<p class="note">番号を読み込み中</p>';
@@ -3193,7 +3232,8 @@ function openDetail(day,i){
   detCur={day:day,sh:sh};
   $("detInternal").className=isStaff?"":"hide";
   $("detDelWrap").className=isStaff?"":"hide";
-  $("detTitle").textContent=sh.bin+"　"+(sh.driver||"");
+  // ★ 2026/09/16: 顧客の画面は締め時刻順の通し番号
+  $("detTitle").textContent=(isStaff?sh.bin:_binLabel(sh,_binOrderMap((day&&day.shifts)||[])))+"　"+(sh.driver||"");
   $("detMeta").innerHTML='<div class="metabox">'+
     '<div style="font-size:14px">'+day.date+"　開始 "+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+"</div>"+
     '<div style="font-size:20px;font-weight:800;margin-top:4px">3cm '+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"</div>"+
@@ -3245,7 +3285,8 @@ $("detSub").onclick=()=>{
   const list=detCur.all?detCur.day.shifts:[detCur.sh];
   const rows=list.reduce((n,sh)=>{ const c=cnt(sh); return n+c.a+c.b; },0);
   if(!rows){ notify("書き出す読取がありません",""); return; }
-  ask({title:(detCur.all?detCur.day.date+" 全便":detCur.sh.bin)+" のCSVを書き出します",
+  // ★ 2026/09/16: 確認文言も書き出す番号に合わせる
+  ask({title:(detCur.all?detCur.day.date+" 全便":_binLabel(detCur.sh,_binOrderMap(detCur.day.shifts||[])))+" のCSVを書き出します",
     body:"番号 "+rows+"件\nファイル名 "+submitName(detCur.day,list.filter(sh=>sh.scans.length)),okText:"書き出す",
     onOk:()=>exportSubmit(detCur.day,list)});
 };
