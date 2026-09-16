@@ -257,6 +257,18 @@ a.tel{color:var(--blue);font-weight:700;text-decoration:none}
 .b-open{color:var(--blue);background:var(--blue-bg);border-color:#A9C4E0}
 select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);
   border:1px solid var(--line);border-radius:8px;background:var(--card)}
+/* ★ 2026/09/16: 12桁以外を読んだときの全画面警告。「確認した」をタップするまで閉じない */
+#errFlash{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;align-items:center;
+  justify-content:center;background:#C4271D;color:#FFF;text-align:center;padding:24px}
+#errFlash.on{display:flex}
+#errFlash.blink{animation:errblink .25s steps(2) 4}
+#errFlash .t1{font-size:34px;font-weight:800}
+#errFlash .t2{font-size:18px;font-weight:700;margin-top:10px}
+#errFlash .t3{font-size:15px;margin-top:8px;opacity:.9}
+#errFlash .cnt{font-size:15px;font-weight:700;margin-top:14px;min-height:1.2em}
+#errFlash button{margin-top:28px;width:100%;max-width:420px;min-height:72px;font-size:22px;font-weight:800;
+  font-family:inherit;color:#C4271D;background:#FFF;border:none;border-radius:12px;cursor:pointer}
+@keyframes errblink{0%{opacity:1}50%{opacity:.35}}
 </style>
 </head>
 <body>
@@ -830,6 +842,34 @@ function beep(freq,ms,vol){
 }
 const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
 function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTimeout(()=>beep(210,380,.1),960); buzz([250,120,250,120,250]); }
+
+/* ★ 2026/09/16: 12桁以外の読取エラー。
+   正常音（高い短音）と聞き分けられるよう「低音3回＋長い振動」にし、画面全体も赤く点滅させる。 */
+let errOpen=false, errCount=0;
+function readError(sub){
+  beep(180,260,.14); setTimeout(()=>beep(180,260,.14),330); setTimeout(()=>beep(180,260,.14),660);
+  buzz([400,150,400,150,400]);
+  const f=document.getElementById("errFlash"); if(!f) return;
+  errCount = errOpen ? errCount+1 : 1;
+  errOpen=true;
+  document.getElementById("errFlashSub").textContent=sub||"";
+  document.getElementById("errFlashCnt").textContent =
+    errCount>1 ? "確認前に読んだ "+(errCount-1)+" 件もカウントしていません。読み直してください" : "";
+  f.classList.add("on");
+  f.classList.remove("blink"); void f.offsetWidth; f.classList.add("blink");
+  try{ const a=document.activeElement; if(a&&a.blur) a.blur(); }catch(e){}
+}
+function closeReadError(){
+  errOpen=false; errCount=0;
+  const f=document.getElementById("errFlash"); if(f) f.classList.remove("on","blink");
+}
+document.addEventListener("DOMContentLoaded",()=>{
+  const b=document.getElementById("errAck"); if(b) b.addEventListener("click",closeReadError);
+});
+
+/* ★ 2026/09/16: iPhone はマナーモード（消音スイッチ）で Web Audio が鳴らない。
+   対応している iOS では「再生」扱いにして、マナーモードでも音が出るようにする。 */
+try{ if(navigator.audioSession) navigator.audioSession.type="playback"; }catch(e){}
 
 /* ---------- 音の初期化（iOS対策） ---------- */
 function unlockAudio(){
@@ -1591,13 +1631,18 @@ $("oddDrop").onclick=()=>{
 let seenIdx=null;
 function buildSeen(){ seenIdx=new Map(); S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>seenIdx.set(x.no,true))); }
 function handle(raw){
-  const no=normalize(raw); if(!no) return;
+  const no=normalize(raw);
   if(!inScan()) return;
+  // ★ 2026/09/16: 数字を含まないコードも黙って捨てずにエラーにする
+  if(!no){
+    setBand("dup","お問い合わせ番号ではありません",String(raw).slice(0,20),"カウントしていません。12桁のバーコードを読み直してください");
+    readError("お問い合わせ番号ではないバーコードです"); return;
+  }
   if(!seenIdx) buildSeen();
 
   if(!/^\d{12}$/.test(no)){
     setBand("dup","12桁ではありません",no,no.length+"桁を読み取りました。カウントしていません");
-    beep(220,320,.09); buzz([80,60,80]); return;
+    readError(no.length+"桁のバーコードを読みました（カウントしていません）"); return;
   }
   if(seenIdx.has(no)){
     const first=findFirst(no);
@@ -1997,7 +2042,10 @@ document.addEventListener("keydown",e=>{
 
   if(e.key==="Enter"||e.key==="Tab"){
     const code=buf; const dur=now-bufStart; buf="";
-    if(code.length<6) return;
+    if(!code) return;
+    // ★ 2026/09/16: 以前は6文字未満を無音で捨てていたため、短いバーコードを読んでも
+    //   アプリ側は何も反応しなかった。計数中（欄の外）は短くても必ず判定に回す。
+    if(inField && code.length<6) return;
     // 欄にカーソルがある場合のみ速度で判定（1文字あたり120ms以内ならリーダー）
     if(inField && dur > code.length*120) return;       // 手で打った分は各欄に任せる
     e.preventDefault();
@@ -2006,8 +2054,11 @@ document.addEventListener("keydown",e=>{
       if(el.id==="hisSearch"||el.id==="detSearch"){ try{ el.value=""; }catch(err){} }
       if(el.id==="hisSearch") render();
     }
-    if(askOpen||!inScan()) return;
-    if(sheetOpen&&!dupOpen&&!oddOpen) return;   // 二度読み・番号ちがいの確認中も読み取りを続けられる
+    if(!inScan()) return;
+    // ★ 2026/09/16: 確認画面が出ている間の読取はカウントせず、もう一度警告する
+    if(errOpen){ readError("確認画面が出ている間に読み取りました"); return; }
+    // ★ 2026/09/16: 以前は他の画面を開いている間の読取を無音で捨てていた
+    if(askOpen||(sheetOpen&&!dupOpen&&!oddOpen)){ readError("画面を閉じてから読み直してください"); return; }
     handle(code);
     if(locked) paintLock();
     return;
@@ -3633,5 +3684,12 @@ try{
     history.replaceState(null,"",location.pathname);
 }catch(e){}
 </script>
+<div id="errFlash" role="alertdialog" aria-modal="true">
+  <div class="t1">読み直してください</div>
+  <div class="t2" id="errFlashSub"></div>
+  <div class="t3">カウントしていません。<br>12桁のお問い合わせ番号を読んでください。</div>
+  <div class="cnt" id="errFlashCnt"></div>
+  <button type="button" id="errAck">確認した</button>
+</div>
 </body>
 </html>
