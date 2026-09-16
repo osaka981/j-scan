@@ -155,6 +155,9 @@ footer .btn{flex:1}
   border-radius:14px 14px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom));
   max-height:88dvh;overflow-y:auto;display:none}
 .sheet.on{display:block}
+/* ★ 2026/09/16: 手入力は画面の上側に出す（下に出すとキーボードで隠れるため） */
+#shManual{top:calc(10px + env(safe-area-inset-top));bottom:auto;left:10px;right:10px;border-radius:14px;
+  padding-bottom:14px;box-shadow:0 8px 28px rgba(12,20,28,.28);border:1px solid var(--line)}
 #shDup{top:50%;bottom:auto;transform:translateY(-50%);left:14px;right:14px;border-radius:12px;
   max-height:82dvh;box-shadow:0 8px 28px rgba(12,20,28,.28);border:1px solid var(--line);
   padding:16px 16px 18px}
@@ -936,9 +939,18 @@ try{ if(navigator.audioSession) navigator.audioSession.type="playback"; }catch(e
 /* ★ 2026/09/16 修正: 以前は最初の1回のタッチでしか音を有効にしていなかったため、
    アプリを離れて戻ると（iPhone で音の再生が中断され）以後ずっと鳴らなくなっていた。
    タッチのたびに状態を確認し、止まっていれば作り直して有効にする（タッチ中でないと有効にできないため）。 */
+/* ★ 2026/09/16 追記: iPhone ではアプリを離れて戻ったあと、状態が「再生中」のままでも
+   実際には音が出なくなることがある。離れたら「作り直しが必要」の印を付け、
+   戻って最初にタッチ・キー入力したときに必ず作り直す。 */
+let audioStale=false;
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") audioStale=true; });
+window.addEventListener("pagehide",()=>{ audioStale=true; });
+window.addEventListener("blur",()=>{ audioStale=true; });
 function unlockAudio(){
   try{
     audioSessionPlayback();
+    if(AC && audioStale){ try{ AC.close(); }catch(e){} AC=null; }
+    audioStale=false;
     if(AC && AC.state!=="running"){
       try{ AC.resume(); }catch(e){}
       // 中断・終了した音声は再開できないことがあるので、タッチ中に新しく作り直す
@@ -1527,7 +1539,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.5";
+const APP_VER="2026-09-16.7";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1614,7 +1626,7 @@ const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCance
 
 /* ---------- 番号帯ちがいの検知 ---------- */
 // その日の読取から「先頭4桁の多数派」を求め、そこから外れた番号を警告する
-const ODD_MIN=30, ODD_RATIO=.8, ODD_LEN=4;
+const ODD_MIN=10, ODD_RATIO=.8, ODD_LEN=4;   // ★ 2026/09/16: 30件→最初の10件で番号帯を決める
 function headOf(no){ return String(no).slice(0,ODD_LEN); }
 function majorHead(){
   const m=new Map(); let total=0;
