@@ -1477,7 +1477,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.2";
+const APP_VER="2026-09-16.3";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1653,6 +1653,7 @@ function showOdd(no,size,base){
   oddQ.push({no:no,size:size,ts:now,base:base});
   setBand("dup","番号がちがいます",fmt(no),"多数派は "+base+"　荷物を確認してください");
   alarmOdd();
+  if(oddOpen && !$("shOdd").classList.contains("on")) oddOpen=false;   // ★ 2026/09/16 表示のずれを直す
   if(!oddOpen) nextOdd(); else paintOddRest();
   renderSoon();
 }
@@ -1737,6 +1738,7 @@ function showDup(no,first){
   dupQ.push({no:no,ts:now,first:first});
   setBand("dup","二度読み検知",fmt(no),hms(first.ts)+" に読取済み");
   alarm();
+  if(dupOpen && !$("shDup").classList.contains("on")) dupOpen=false;   // ★ 2026/09/16 表示のずれを直す
   if(!dupOpen) nextDup(); else paintDupRest();
   renderSoon();
 }
@@ -2129,10 +2131,20 @@ document.addEventListener("keydown",e=>{
 
 /* ---------- シート ---------- */
 function openSheet(id){ sheetOpen=true; $("scrim").classList.add("on"); $(id).classList.add("on"); }
-function closeSheets(){ sheetOpen=false; $("scrim").classList.remove("on");
-  document.querySelectorAll(".sheet").forEach(s=>s.classList.remove("on"));
+/* ★ 2026/09/16 修正: 以前は、番号ちがいの確認を閉じると二度読みの確認画面まで一緒に閉じていた（逆も同じ）。
+   そのあと内部では「確認画面を表示中」のままになるため、次の二度読みは上部の表示と警告音だけで、
+   タップが必要な確認画面が出なくなっていた。
+   二度読み・番号ちがいの確認画面は、それぞれの「確認」ボタンでしか閉じないようにする。 */
+function closeSheets(){
+  if(!inScan()){ dupOpen=false; oddOpen=false; dupQ=[]; oddQ=[]; }
+  const keep=[];
+  if(dupOpen) keep.push("shDup");
+  if(oddOpen) keep.push("shOdd");
+  document.querySelectorAll(".sheet").forEach(s=>{ if(!keep.includes(s.id)) s.classList.remove("on"); });
+  sheetOpen=keep.length>0;
+  $("scrim").classList.toggle("on",sheetOpen);
   try{ const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) a.blur(); }catch(e){} }
-$("scrim").onclick=()=>{ if($("shDup").classList.contains("on")) return; closeSheets(); };
+$("scrim").onclick=()=>{ if(dupOpen||oddOpen) return; closeSheets(); };
 document.querySelectorAll("[data-close]").forEach(b=>b.onclick=closeSheets);
 
 function setMode(v){
