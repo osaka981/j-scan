@@ -91,6 +91,18 @@ header .bsub{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidde
 .band.dup .b1,.band.dup .b2{color:var(--red)}
 .band.warn{background:var(--warn-bg);border-color:#DFC97A}
 .band.warn .b1,.band.warn .b2{color:var(--warn)}
+/* ★ 2026/09/16: 登録済み（数えない）の表示 */
+.band.known{background:#E6ECF2;border-color:#9FB2C6}
+.band.known .b1{color:#1F3A5F}
+/* ★ 2026/09/16: 10件区切りの大表示（操作は止めない） */
+#tickFlash{position:fixed;left:0;right:0;top:34%;z-index:150;display:none;pointer-events:none;text-align:center}
+#tickFlash .box{display:inline-block;background:#0E6E6B;color:#FFF;border-radius:18px;padding:18px 34px;
+  box-shadow:0 8px 28px rgba(12,20,28,.3)}
+#tickFlash .n{font-size:64px;font-weight:800;line-height:1}
+#tickFlash .l{font-size:18px;font-weight:700;margin-top:6px}
+#tickFlash.on{display:block;animation:tickpop .9s ease-out forwards}
+@keyframes tickpop{0%{opacity:0;transform:scale(.8)}12%{opacity:1;transform:scale(1.06)}25%{transform:scale(1)}80%{opacity:1}100%{opacity:0}}
+#btnRR.on{background:#8A4B00;border-color:#8A4B00;color:#FFF}
 .band .acts{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 
 .modes{display:flex;gap:8px;padding:10px 12px 0;flex:0 0 auto}
@@ -366,6 +378,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   </div>
 
   <div style="padding:8px 12px 0"><button class="btn sm dim" id="btnCarrier" style="width:100%;text-align:left"></button></div>
+
+  <div style="padding:8px 12px 0"><button class="btn sm dim" id="btnRR" style="width:100%">ケース読み直しモード（オフ）</button></div>
 
   <div class="modes">
     <button class="mode" id="m3">3cm<span class="hint" id="m3hint">通常</span></button>
@@ -854,6 +868,38 @@ function beep(freq,ms,vol){
 }
 const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
 function alarm(){ beep(210,380,.1); setTimeout(()=>beep(210,380,.1),480); setTimeout(()=>beep(210,380,.1),960); buzz([250,120,250,120,250]); }
+
+/* ★ 2026/09/16: 音の一覧（現場用の説明書と同じ内容）
+   登録 3cm      … ピッ（短い高音）＋短い振動
+   登録 5cm      … ピーッ（少し長い高音）＋振動3回
+   10件区切り    … ピッ↗ピーン（上がる2音）＋長めの振動、画面中央に件数
+   登録済み      … ポポ（低めの短音2回）＋ごく短い振動。数えない・止まらない
+   漏れ発見      … ピロリン（上がる3音）＋振動2回（ケース読み直しモードで新しく登録したとき）
+   エラー        … ブッブッブッ（低音3回）＋長い振動3回、赤い画面（12桁以外など。タップ必須）
+   番号帯ちがい  … ピポピポ（高低4回）＋長い振動、確認画面（タップ必須）
+   画面から戻った… ボッボッ（低音2回）、オレンジの画面（タップ必須）
+   再開・切替    … ピッ（短い確認音） */
+function sndReg(size){ beep(size===5?1180:900,size===5?110:60,.06); buzz(size===5?[40,40,40]:25); }
+function sndTick(){ beep(1320,90,.09); setTimeout(()=>beep(1760,200,.09),120); buzz([60,60,220]); }
+function sndKnown(){ beep(520,50,.05); setTimeout(()=>beep(520,50,.05),110); buzz(15); }
+function sndFound(){ beep(1180,80,.08); setTimeout(()=>beep(1480,80,.08),100); setTimeout(()=>beep(1760,140,.08),200); buzz([80,50,80]); }
+let tickT=null;
+function tickFlash(n,label){
+  const f=document.getElementById("tickFlash"); if(!f) return;
+  document.getElementById("tickN").textContent=n;
+  document.getElementById("tickL").textContent=label||"10件区切り";
+  f.classList.remove("on"); void f.offsetWidth; f.classList.add("on");
+  clearTimeout(tickT); tickT=setTimeout(()=>f.classList.remove("on"),950);
+}
+/* ★ 2026/09/16: ケース読み直しモード。登録済みは「確認済み」、未登録は「漏れ発見」として登録する */
+let rr={on:false,known:0,found:0,act:-1};
+const rrLine=()=>"確認済み "+rr.known+"件　漏れ発見 "+rr.found+"件";
+function paintRR(){
+  const b=document.getElementById("btnRR"); if(!b) return;
+  if(rr.on&&(!inScan()||rr.act!==S.active)) rr.on=false;
+  b.classList.toggle("on",rr.on); b.classList.toggle("dim",!rr.on);
+  b.textContent=rr.on?("読み直し中　"+rrLine()+"　［終了］"):"ケース読み直しモード（オフ）";
+}
 
 /* ★ 2026/09/16: 12桁以外の読取エラー。
    正常音（高い短音）と聞き分けられるよう「低音3回＋長い振動」にし、画面全体も赤く点滅させる。 */
@@ -1481,7 +1527,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.4";
+const APP_VER="2026-09-16.5";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1729,9 +1775,18 @@ function commit(no){
     if(oddQ.length&&!oddOpen){ alarmOdd(); nextOdd(); renderSoon(); return; }
     if(!isOkHead(headOf(no))){ oddSeen.add(no); showOdd(no,size,baseLabel()); return; }
   }
-  setBand("ok",size+"cm で登録",fmt(no),"この便 "+sh.scans.length+"件");
-  beep(size===5?1180:900,size===5?110:60,.06);
-  buzz(size===5?[40,40,40]:25);
+  const cc=cnt(sh), nSize=size===3?cc.a:cc.b;
+  if(rr.on){
+    rr.found++;
+    setBand("warn","漏れ発見 → 登録しました",fmt(no),rrLine());
+    sndFound(); tickFlash("+1","漏れ発見"); paintRR();
+  }else if(nSize>0 && nSize%10===0){
+    setBand("ok",size+"cm "+nSize+"件（10件区切り）",fmt(no),"この便 "+sh.scans.length+"件");
+    sndTick(); tickFlash(nSize,size+"cm　10件区切り");
+  }else{
+    setBand("ok",size+"cm で登録",fmt(no),"この便 "+sh.scans.length+"件");
+    sndReg(size);
+  }
   renderSoon();
 }
 let dupQ=[], dupOpen=false, dupBlockCnt=0;
@@ -1745,15 +1800,16 @@ function dupBlocked(){
   setBand("dup","登録していません","二度読みの確認が先です","確認前に読んだ "+dupBlockCnt+" 件は読み直してください");
 }
 function dupBlockReset(){ dupBlockCnt=0; const el=$("dupBlocked"); if(el){ el.textContent=""; el.classList.add("hide"); } }
+/* ★ 2026/09/16 変更: 登録済みの番号は確認画面を出さずに「登録済み」の音で通す（数えない）。
+   記録（二度読みの記録）は従来どおり残す。 */
 function showDup(no,first){
   const now=Date.now();
   S.dupLog.push({no:no,ts:now,firstTs:first.ts,firstBin:first.bin,bin:cur().bin});
   saveSoon();
-  dupQ.push({no:no,ts:now,first:first});
-  setBand("dup","二度読み検知",fmt(no),hms(first.ts)+" に読取済み");
-  alarm();
-  if(dupOpen && !$("shDup").classList.contains("on")) dupOpen=false;   // ★ 2026/09/16 表示のずれを直す
-  if(!dupOpen) nextDup(); else paintDupRest();
+  if(rr.on) rr.known++;
+  const where=hms(first.ts)+" に読取済み"+(first.bin&&first.bin!==cur().bin?"（"+first.bin+"）":"");
+  setBand("known",rr.on?"確認済み（登録済み）":"登録済み（数えていません）",fmt(no),rr.on?rrLine():where);
+  sndKnown(); paintRR();
   renderSoon();
 }
 function paintDupRest(){
@@ -1921,6 +1977,7 @@ function renderSoon(){                      // 連続読取時は描画をまと
   requestAnimationFrame(()=>{ renderQ=false; render(); });
 }
 function render(){
+  paintRR();
   if(!inScan()){ showView(); return; }
   const sh=cur();
   const cc=cnt(sh), c3=cc.a, c5=cc.b;
@@ -2179,6 +2236,18 @@ function paintCarrier(){
   b.className="btn sm"+(same?" dim":"");
 }
 $("m3").onclick=()=>setMode(true);
+$("btnRR").onclick=()=>{
+  if(!inScan()) return;
+  if(!rr.on){
+    rr={on:true,known:0,found:0,act:S.active};
+    setBand("warn","ケース読み直しモード","ケースの荷物をすべて読んでください","登録済みは「ポポ」、漏れていた荷物は「ピロリン」で登録します");
+    beep(660,90,.06); paintRR();
+  }else{
+    const k=rr.known,f=rr.found; rr.on=false; paintRR();
+    beep(880,90,.06);
+    setBand(f?"warn":"ok","読み直し終了","確認済み "+k+"件　漏れ発見 "+f+"件",f?"漏れていた "+f+" 件を登録しました":"漏れはありませんでした");
+  }
+};
 $("m5").onclick=()=>setMode(false);
 
 let hisMiss=false;
@@ -3775,6 +3844,7 @@ try{
   <button type="button" id="resumeBtn">タップして読み取りを再開</button>
 </div>
 <div id="focusSink" tabindex="-1"></div>
+<div id="tickFlash"><div class="box"><div class="n" id="tickN"></div><div class="l" id="tickL">10件区切り</div></div></div>
 <div id="errFlash" role="alertdialog" aria-modal="true">
   <div class="t1">読み直してください</div>
   <div class="t2" id="errFlashSub"></div>
