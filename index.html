@@ -1043,7 +1043,7 @@ document.addEventListener("DOMContentLoaded",()=>{
    B transient : 通知音として音楽の上に重ねて鳴らす。音楽が小さくなることがある
    C mixed     : 普段は B、エラー音のときだけ transient-solo（音楽を止めて／消してエラー音を強調し、終わったら戻す） */
 const AMODE_LS="jet-audio-mode";
-let AMODE=(()=>{ try{ return localStorage.getItem(AMODE_LS)||"playback"; }catch(e){ return "playback"; } })();
+let AMODE=(()=>{ try{ return localStorage.getItem(AMODE_LS)||"mixed"; }catch(e){ return "mixed"; } })();
 let soloT=null, soloOn=false;
 function baseType(){ return AMODE==="playback"?"playback":"transient"; }
 function setSessionType(t){
@@ -1661,7 +1661,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.10";
+const APP_VER="2026-09-16.11";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
