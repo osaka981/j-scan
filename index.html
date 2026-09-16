@@ -360,6 +360,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
         <button class="btn sm" type="button" data-amode="mixed" style="flex:1">C エラー強調</button>
       </div>
       <p class="note" id="amodeNote" style="margin-top:6px"></p>
+      <div style="font-size:13px;font-weight:700;margin:10px 0 4px">登録音の大きさ　<span id="regVolVal" class="num"></span> / 10</div>
+      <input id="regVol" type="range" min="1" max="10" step="1" style="width:100%">
       <div style="font-size:13px;font-weight:700;margin:10px 0 4px">エラー音の大きさ　<span id="errVolVal" class="num"></span> / 10</div>
       <input id="errVol" type="range" min="1" max="10" step="1" style="width:100%">
       <button class="btn wide dim" id="btnErrTest" type="button" style="margin-top:6px">エラー音だけ鳴らす</button>
@@ -883,7 +885,10 @@ const SND_MASTER=1.0;            // 全体の音量（1.0 = 最大）。大き�
 /* ★ 2026/09/16: エラー音だけ別に大きさを変えられるようにする（10段階。この端末に保存） */
 const ERRVOL_LS="jet-err-vol";
 let ERR_VOL=(()=>{ try{ const v=parseInt(localStorage.getItem(ERRVOL_LS),10); return (v>=1&&v<=10)?v:7; }catch(e){ return 7; } })();
-let OUT=null, OUT_ERR=null, ERR_GAIN=null, OUT_AC=null;
+/* ★ 2026/09/16: 登録音（いちばん多く聞く音）は耳に優しい音色にし、大きさも別に変えられるようにする */
+const REGVOL_LS="jet-reg-vol";
+let REG_VOL=(()=>{ try{ const v=parseInt(localStorage.getItem(REGVOL_LS),10); return (v>=1&&v<=10)?v:6; }catch(e){ return 6; } })();
+let OUT=null, OUT_ERR=null, ERR_GAIN=null, OUT_REG=null, REG_GAIN=null, OUT_AC=null;
 function sndOut(kind){
   if(!(OUT && OUT_AC===AC)){
     const mk=()=>{ const c=AC.createDynamicsCompressor();
@@ -892,10 +897,12 @@ function sndOut(kind){
     OUT=mk(); OUT.connect(master);
     // エラー音：音量を整えたあとで大きさを下げる（整える前に下げると、整える処理で元の大きさに戻ってしまうため）
     OUT_ERR=mk(); ERR_GAIN=AC.createGain(); OUT_ERR.connect(ERR_GAIN); ERR_GAIN.connect(master);
+    OUT_REG=mk(); REG_GAIN=AC.createGain(); OUT_REG.connect(REG_GAIN); REG_GAIN.connect(master);
     OUT_AC=AC;
   }
   if(ERR_GAIN) ERR_GAIN.gain.value=ERR_VOL/10;
-  return kind==="err"?OUT_ERR:OUT;
+  if(REG_GAIN) REG_GAIN.gain.value=REG_VOL/10;
+  return kind==="err"?OUT_ERR:(kind==="reg"?OUT_REG:OUT);
 }
 function tone(freq,ms,type,level,kind){
   const t0=AC.currentTime, dur=ms/1000;
@@ -916,6 +923,15 @@ function beep(freq,ms,vol,type){
     // iPhone ではアプリを離れて戻ると "interrupted" になり鳴らなくなるため、再開を試みる
     if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
     tone(freq,ms,type||"square",0.9);      // vol は使わず常に最大出力
+  }catch(e){}
+}
+/* 登録系の音：角のない音色（三角波）＋少しの倍音で、はっきりしつつ耳に刺さらない音にする */
+function soft(freq,ms){
+  try{
+    AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
+    tone(freq,ms,"triangle",0.9,"reg");
+    tone(freq*2,ms,"sine",0.25,"reg");
   }catch(e){}
 }
 /* エラー音用：少しずらした2つの音を重ねて「ブー」と濁った耳障りな音にする（スマホのスピーカーでも出る高さ） */
@@ -940,10 +956,10 @@ function alarm(){ soloBegin(1400); harsh(300); setTimeout(()=>harsh(300),380); s
    番号帯ちがい  … ピポピポ（高低4回）＋長い振動、確認画面（タップ必須）
    画面から戻った… ボッボッ（低音2回）、オレンジの画面（タップ必須）
    再開・切替    … ピッ（短い確認音） */
-function sndReg(size){ beep(size===5?1180:900,size===5?110:60,.06); buzz(size===5?[40,40,40]:25); }
-function sndTick(){ beep(1320,90,.09); setTimeout(()=>beep(1760,200,.09),120); buzz([60,60,220]); }
-function sndKnown(){ beep(520,50,.05); setTimeout(()=>beep(520,50,.05),110); buzz(15); }
-function sndFound(){ beep(1180,80,.08); setTimeout(()=>beep(1480,80,.08),100); setTimeout(()=>beep(1760,140,.08),200); buzz([80,50,80]); }
+function sndReg(size){ soft(size===5?1180:1000,size===5?120:70); buzz(size===5?[40,40,40]:25); }
+function sndTick(){ soft(1320,90); setTimeout(()=>soft(1760,200),120); buzz([60,60,220]); }
+function sndKnown(){ soft(620,55); setTimeout(()=>soft(620,55),110); buzz(15); }
+function sndFound(){ soft(1180,80); setTimeout(()=>soft(1480,80),100); setTimeout(()=>soft(1760,140),200); buzz([80,50,80]); }
 let tickT=null;
 function tickFlash(n,label){
   const f=document.getElementById("tickFlash"); if(!f) return;
@@ -1008,6 +1024,13 @@ document.addEventListener("DOMContentLoaded",()=>{
     audioSessionApply(); unlockAudio(); beep(880,90);
     setTimeout(paintAmode,200); paintAmode();
   }));
+  const rv=document.getElementById("regVol"), rvv=document.getElementById("regVolVal");
+  if(rv){
+    rv.value=REG_VOL; rvv.textContent=REG_VOL;
+    rv.addEventListener("input",()=>{ REG_VOL=parseInt(rv.value,10)||6; rvv.textContent=REG_VOL;
+      try{ localStorage.setItem(REGVOL_LS,String(REG_VOL)); }catch(e){} });
+    rv.addEventListener("change",()=>{ unlockAudio(); sndReg(3); setTimeout(()=>sndReg(3),500); });
+  }
   const ev=document.getElementById("errVol"), evv=document.getElementById("errVolVal");
   if(ev){
     ev.value=ERR_VOL; evv.textContent=ERR_VOL;
@@ -1677,7 +1700,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.12";
+const APP_VER="2026-09-16.13";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
