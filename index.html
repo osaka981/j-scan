@@ -349,10 +349,8 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
       <button class="btn wide dim" id="btnDevAcctToggle">閉じる</button>
     </div>
   </div>
-  <!-- ★ 2026/09/16: 音のテスト -->
+  <!-- ★ 2026/09/16: 開始画面の「音のテスト」は削除（便の開始時に音の確認を必須にしたため） -->
   <div style="text-align:center;margin-top:14px">
-    <button class="btn wide" id="btnSndTest" type="button">🔊 音のテスト</button>
-    <p class="note" id="sndTestNote" style="text-align:center;margin-top:6px">押すと、登録・10件区切り・登録済み・エラーなどの音を順に鳴らします。<br>聞こえない場合は、スマホの音量を確認してください。</p>
     <!-- ★ 2026/09/16: 管理画面で許可された端末だけに表示 -->
     <div id="drvAudioBox" class="hide" style="margin-top:10px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--card)">
       <div style="font-size:13px;font-weight:700;margin-bottom:6px">入力音の設定</div>
@@ -1734,7 +1732,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.16";
+const APP_VER="2026-09-16.17";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
