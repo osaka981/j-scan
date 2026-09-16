@@ -1734,7 +1734,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.15";
+const APP_VER="2026-09-16.16";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -2153,6 +2153,33 @@ $("btnFinish").onclick=()=>{
   if(el) el.addEventListener(ev,()=>{ try{ paintCustSelect(); }catch(e){} });
 });
 
+/* ★ 2026/09/16: 便を始める前に音の確認を必須にする。
+   本体の音量はアプリから分からないため、実際に鳴らして「聞こえた」を押してもらう。 */
+let startSoundOK=false;
+function startSoundCheck(onOk){
+  unlockAudio();
+  sndReg(3);
+  setTimeout(()=>errSound(),700);
+  ask({
+    title:"音の確認",
+    body:"今、登録音「ピッ」とエラー音「ブッブッブッ」を鳴らしました。\n両方とも聞こえましたか？\n\n聞こえない状態で計数すると、入力漏れに気づけません。",
+    okText:"聞こえた（開始する）",
+    onOk:onOk,
+    altText:"もう一度鳴らす",
+    onAlt:()=>startSoundCheck(onOk),
+    alt2Text:"聞こえない",
+    onAlt2:()=>{
+      const mixed=(AMODE==="mixed");
+      beep(620,120);
+      notify("音が聞こえない場合",
+        "① スマホの音量ボタンで音量を上げてください。\n"+
+        (mixed?"② マナーモードを解除してください（この端末は「入力音以外の音声も聞く」設定のため、マナーモードでは鳴りません）。\n"
+              :"② イヤホンを使っている場合は、接続を確認してください。\n")+
+        "③ そのあと、もう一度「集荷スタート」を押してください。\n\n直らない場合は管理者に連絡してください。");
+    },
+    noCancel:true
+  });
+}
 $("btnStart").onclick=()=>{
   /* ★ 2026/09/16: 端末アカウントの会社と、入力したIDの人の会社が
      食い違っていたら始めさせない（委託会社の端末で自社の人が計数すると、
@@ -2187,6 +2214,11 @@ $("btnStart").onclick=()=>{
   const drv=$("sDrv").value.trim();
   if(!drv){ notify("ドライバー名が未入力です","開始画面でドライバー名を入力してください。"); return; }
   const binIn=$("sBin").value.trim();
+  // ★ 2026/09/16: 音の確認（「聞こえた」を押したら、もう一度この処理を通して開始する）
+  if(!startSoundOK){
+    startSoundCheck(()=>{ startSoundOK=true; try{ $("btnStart").onclick(); } finally { startSoundOK=false; } });
+    return;
+  }
   S.custId=custId; S.custName=cust.name||"";
   S.shifts.push({id:Date.now(),bin:isAutoBin(binIn)?nextBinFor(id,drv):tidyBin(binIn),
     driver:drv,tel:$("sTel").value.trim(),driverId:canonId(id),corp:corpFromId(id),
