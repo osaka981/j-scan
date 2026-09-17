@@ -1735,7 +1735,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.19";
+const APP_VER="2026-09-16.20";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1921,6 +1921,11 @@ function markOdd(no,kept){
   if(e) e.kept=!!kept;
 }
 $("oddKeep").onclick=()=>{
+  // ★ 2026/09/16: 番号ちがいの荷物がちょうど10件目だった場合、区切り音が鳴っていなかったので、ここで鳴らす
+  if(oddCur && inScan()){
+    const sz=oddCur.size, c=cnt(cur()), n=sz===3?c.a:c.b;
+    if(n>0 && n%10===0 && !rr.on){ setTimeout(()=>{ sndTick(); tickFlash(n,sz+"cm　10件区切り"); },250); }
+  }
   if(oddCur){ markOdd(oddCur.no,true); addOkHead(headOf(oddCur.no)); }
   // 同じ番号帯が待ち行列にあれば、まとめて通す
   if(oddCur){ const h=headOf(oddCur.no);
@@ -2537,8 +2542,15 @@ $("hisMiss").onclick=()=>{ hisMiss=true; render(); };
 $("hisSearch").addEventListener("input",()=>render());
 $("hisSearch").addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); $("hisSearch").blur(); } });
 $("btnManual").onclick=()=>{ $("inNo").value=""; openSheet("shManual"); setTimeout(()=>$("inNo").focus(),80); };
-$("btnMan3").onclick=()=>{ const v=$("inNo").value; mode3=true; closeSheets(); handle(v); };
-$("btnMan5").onclick=()=>{ const v=$("inNo").value; mode3=false; closeSheets(); handle(v); };
+/* ★ 2026/09/16 修正: 以前は手入力で「5cmで登録」すると、その後のリーダーの読取まで
+   5cm のままになっていた（サイズの数え間違いにつながる）。手入力のあとは元のサイズに戻す。 */
+function manualReg(is3){
+  const v=$("inNo").value, keep=mode3;
+  closeSheets();
+  mode3=is3; try{ handle(v); } finally { mode3=keep; renderSoon(); }
+}
+$("btnMan3").onclick=()=>manualReg(true);
+$("btnMan5").onclick=()=>manualReg(false);
 $("btnMenu").onclick=openSummary;
 // 計数画面のログアウト：読取が1件でもあれば不可（締めるで確定させる）
 $("btnLogout").onclick=()=>{
