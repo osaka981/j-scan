@@ -1778,7 +1778,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.26";
+const APP_VER="2026-09-16.27";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1885,8 +1885,9 @@ function majorHead(sh){
    エラー音は最初の1回だけ鳴らし、続けて読んだ分は件数だけ表示する。 */
 let oddBlockCnt=0;
 function oddBlocked(){
-  stopAllSounds(); errSound();   // 毎回鳴らす。前の音は止めてから（重ねない）
   oddBlockCnt++;
+  // ★ 2026/09/16: 12桁以外のエラーと同じく、赤い画面で入力を止める（「確認した」を押すと番号ちがいの確認画面に戻る）
+  readError("番号ちがいの確認が先です。「対象外」か「ゆうパケットだった」を選んでから読み直してください");
   const el=$("oddBlocked");
   el.textContent="確認前に読んだ "+oddBlockCnt+" 件は登録していません。確認してから読み直してください";
   el.classList.remove("hide");
