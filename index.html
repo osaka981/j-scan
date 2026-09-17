@@ -848,6 +848,8 @@ function saveSoon(){                        // 読取のたびの保存を最大
   saveT=setTimeout(()=>{ saveT=null; saveLast=Date.now(); save(); },250);
 }
 ["pagehide","blur"].forEach(ev=>window.addEventListener(ev,()=>{ if(saveT){ clearTimeout(saveT); saveT=null; } save(); }));
+// ★ 2026/09/16: 画面が隠れた時点でも必ず保存する（iPhone は裏に回ったあと予告なく終了されることがある）
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible"){ if(saveT){ clearTimeout(saveT); saveT=null; } save(); } });
 document.addEventListener("visibilitychange",()=>{ if(document.visibilityState!=="visible") save(); });
 let saveWarned=false;
 /* ★ 2026/09/14: persist() が通ると、空き容量が減ったときの自動削除や
@@ -1639,8 +1641,9 @@ async function syncNow(){
       if(!r.ok) continue;
       sh._synced=stamp;
       // 番号一覧は 20件たまるごと / 減ったとき / 締めたとき だけ送る（通信量対策）
+      // ★ 2026/09/16: 100件ごと → 20件ごとに変更（端末の故障・紛失時に番号が分からなくなる件数を減らす）
       const nlen=sh.scans.length, plen=sh._nosLen||0;
-      if(nlen-plen>=100||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
+      if(nlen-plen>=20||nlen<plen||(sh.closed&&nlen!==plen)||(sh.closed&&!sh._nosDone)){
         const nr=await fbFetch(FB_URL+jetNosPath(shCustId(sh),S.date,shiftKey(sh))+".json",
           {method:"PUT",headers:{"Content-Type":"application/json"},
            body:JSON.stringify(sh.scans.map(x=>({n:x.no,s:x.size,t:x.ts})))});
@@ -1732,7 +1735,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.17";
+const APP_VER="2026-09-16.19";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -2426,17 +2429,25 @@ function notifyLocked(){
 /* ---------- リーダー入力 ---------- */
 // 通常時は速度を問わず受け付ける。入力欄にカーソルがあるときだけ、
 // 「打ち終えるまでの合計時間」でリーダー（速い）と手入力（遅い）を区別する。
-let buf="", bufT=0, bufStart=0;
+let buf="", bufT=0, bufStart=0, bufOther=0;
 document.addEventListener("keydown",e=>{
   const el=document.activeElement;
   const inField=!!(el&&/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
   const now=Date.now();
-  if(now-bufT>800){ buf=""; bufStart=now; }
+  if(now-bufT>800){ buf=""; bufStart=now; bufOther=0; }
   bufT=now;
 
   if(e.key==="Enter"||e.key==="Tab"){
-    const code=buf; const dur=now-bufStart; buf="";
-    if(!code) return;
+    const code=buf; const dur=now-bufStart; const other=bufOther; buf=""; bufOther=0;
+    if(!code){
+      // ★ 2026/09/16: 文字として受け取れないキー（入力モードの違いなど）のあとに Enter が来た場合、
+      //   以前は何も起きなかった。計数中は必ずエラーにする。
+      if(other>=4 && !inField && inScan()){
+        e.preventDefault();
+        readError("読み取った文字を受け取れませんでした。キーボードの入力モードを確認してください");
+      }
+      return;
+    }
     // ★ 2026/09/16: 以前は6文字未満を無音で捨てていたため、短いバーコードを読んでも
     //   アプリ側は何も反応しなかった。計数中（欄の外）は短くても必ず判定に回す。
     if(inField && code.length<6) return;
@@ -2448,7 +2459,11 @@ document.addEventListener("keydown",e=>{
       if(el.id==="hisSearch"||el.id==="detSearch"){ try{ el.value=""; }catch(err){} }
       if(el.id==="hisSearch") render();
     }
-    if(!inScan()) return;
+    if(!inScan()){
+      // ★ 2026/09/16: 以前は計数中でないときの読取を無音で捨てていた（開始前・締めた後・便に戻る前など）
+      if(!(el&&el.id==="detSearch") && /\d{6,}/.test(normalize(code))) readError("計数中ではありません。「集荷スタート」か「計数中の便に戻る」を押してから読み直してください");
+      return;
+    }
     // ★ 2026/09/16: 確認画面が出ている間の読取はカウントせず、もう一度警告する
     if(errOpen){ readError("確認画面が出ている間に読み取りました"); return; }
     if(gateOpen){ readError("「タップして読み取りを再開」を押してから読み直してください"); return; }
@@ -2462,6 +2477,8 @@ document.addEventListener("keydown",e=>{
   if(e.key.length===1){
     if(!buf) bufStart=now;
     buf+=e.key; if(buf.length>40){ buf=buf.slice(-40); }
+  }else if(e.key==="Unidentified"||e.key==="Process"){
+    bufOther++;
   }
 });
 
