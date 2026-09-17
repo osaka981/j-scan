@@ -917,6 +917,14 @@ function sndOut(kind){
   if(REG_GAIN) REG_GAIN.gain.value=REG_VOL/10;
   return kind==="err"?OUT_ERR:(kind==="reg"?OUT_REG:OUT);
 }
+/* ★ 2026/09/16: 鳴っている音・鳴らす予定の音を止められるようにする */
+const SND_T=new Set(), SND_O=new Set();
+function later(fn,ms){ const id=setTimeout(()=>{ SND_T.delete(id); fn(); },ms); SND_T.add(id); return id; }
+function stopAllSounds(){
+  SND_T.forEach(id=>clearTimeout(id)); SND_T.clear();
+  SND_O.forEach(o=>{ try{ o.stop(); }catch(e){} }); SND_O.clear();
+  try{ if(navigator.vibrate) navigator.vibrate(0); }catch(e){}
+}
 function tone(freq,ms,type,level,kind){
   const t0=AC.currentTime, dur=ms/1000;
   const o=AC.createOscillator(), g=AC.createGain();
@@ -928,7 +936,8 @@ function tone(freq,ms,type,level,kind){
   g.gain.linearRampToValueAtTime(0.0001,t0+dur);
   o.connect(g); g.connect(sndOut(kind));
   o.start(t0); o.stop(t0+dur+0.02);
-  o.onended=()=>{ try{o.disconnect();g.disconnect();}catch(e){} };
+  SND_O.add(o);
+  o.onended=()=>{ SND_O.delete(o); try{o.disconnect();g.disconnect();}catch(e){} };
 }
 function beep(freq,ms,vol,type){
   try{
@@ -947,6 +956,35 @@ function soft(freq,ms){
     tone(freq*2,ms,"sine",0.25,"reg");
   }catch(e){}
 }
+/* ★ 2026/09/16: 音の遅れ対策。
+   iPhone は音が鳴っていない時間が続くと音声の出力を休止し、次に鳴らすときの再開に数秒かかることがある
+   （読み取ってから3〜4秒後に音が鳴る原因）。計数中は聞こえない音を流し続けて、出力を休止させない。 */
+let KA=null, KA_AC=null;
+function keepAliveWanted(){
+  return inScan() && document.visibilityState==="visible" && AMODE==="playback";
+}
+function ensureKeepAlive(){
+  try{
+    if(!keepAliveWanted()){ stopKeepAlive(); return; }
+    if(!AC || AC.state==="closed") return;          // 音はタッチ・読取時に作られる
+    if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
+    if(KA && KA_AC===AC) return;
+    stopKeepAlive();
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type="sine"; o.frequency.value=40;            // 低く、ごく小さい音（聞こえない）
+    g.gain.value=0.0002;
+    o.connect(g); g.connect(AC.destination); o.start();
+    KA={o:o,g:g}; KA_AC=AC;
+  }catch(e){}
+}
+function stopKeepAlive(){
+  if(!KA) return;
+  try{ KA.o.stop(); KA.o.disconnect(); KA.g.disconnect(); }catch(e){}
+  KA=null; KA_AC=null;
+}
+setInterval(ensureKeepAlive,2000);
+document.addEventListener("visibilitychange",ensureKeepAlive);
+
 /* エラー音用：少しずらした2つの音を重ねて「ブー」と濁った耳障りな音にする（スマホのスピーカーでも出る高さ） */
 function harsh(ms){
   try{
@@ -957,7 +995,7 @@ function harsh(ms){
   }catch(e){}
 }
 const buzz=n=>{ try{navigator.vibrate&&navigator.vibrate(n);}catch(e){} };
-function alarm(){ soloBegin(1400); harsh(300); setTimeout(()=>harsh(300),380); setTimeout(()=>harsh(300),760); buzz([400,150,400,150,400]); }
+function alarm(){ soloBegin(1400); harsh(300); later(()=>harsh(300),380); later(()=>harsh(300),760); buzz([400,150,400,150,400]); }
 
 /* ★ 2026/09/16: 音の一覧（現場用の説明書と同じ内容）
    登録 3cm      … ピッ（短い高音）＋短い振動
@@ -970,9 +1008,9 @@ function alarm(){ soloBegin(1400); harsh(300); setTimeout(()=>harsh(300),380); s
    画面から戻った… ボッボッ（低音2回）、オレンジの画面（タップ必須）
    再開・切替    … ピッ（短い確認音） */
 function sndReg(size){ soft(size===5?1180:1000,size===5?120:70); buzz(size===5?[40,40,40]:25); }
-function sndTick(){ soft(1320,90); setTimeout(()=>soft(1760,200),120); buzz([60,60,220]); }
-function sndKnown(){ soft(620,55); setTimeout(()=>soft(620,55),110); buzz(15); }
-function sndFound(){ soft(1180,80); setTimeout(()=>soft(1480,80),100); setTimeout(()=>soft(1760,140),200); buzz([80,50,80]); }
+function sndTick(){ soft(1320,90); later(()=>soft(1760,200),120); buzz([60,60,220]); }
+function sndKnown(){ soft(620,55); later(()=>soft(620,55),110); buzz(15); }
+function sndFound(){ soft(1180,80); later(()=>soft(1480,80),100); later(()=>soft(1760,140),200); buzz([80,50,80]); }
 let tickT=null;
 function tickFlash(n,label){
   const f=document.getElementById("tickFlash"); if(!f) return;
@@ -1050,7 +1088,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     rv.value=REG_VOL; rvv.textContent=REG_VOL;
     rv.addEventListener("input",()=>{ REG_VOL=parseInt(rv.value,10)||5; rvv.textContent=REG_VOL;
       try{ localStorage.setItem(REGVOL_LS,String(REG_VOL)); }catch(e){} });
-    rv.addEventListener("change",()=>{ unlockAudio(); sndReg(3); setTimeout(()=>sndReg(3),500); });
+    rv.addEventListener("change",()=>{ unlockAudio(); stopAllSounds(); sndReg(3); later(()=>sndReg(3),500); });
   }
   const ev=document.getElementById("errVol"), evv=document.getElementById("errVolVal");
   if(ev){
@@ -1062,7 +1100,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   const e=document.getElementById("btnErrTest");
   if(e) e.addEventListener("click",()=>{ unlockAudio(); errSound(); setTimeout(paintAmode,300); });
   const r=document.getElementById("btnRegTest");
-  if(r) r.addEventListener("click",()=>{ unlockAudio(); for(let i=0;i<5;i++) setTimeout(()=>sndReg(3),i*700); setTimeout(paintAmode,300); });
+  if(r) r.addEventListener("click",()=>{ unlockAudio(); stopAllSounds(); for(let i=0;i<5;i++) later(()=>sndReg(3),i*700); setTimeout(paintAmode,300); });
   const ab=document.getElementById("admAudioBox");
   if(ab) ab.addEventListener("toggle",paintAmode);
   paintAmode();
@@ -1075,11 +1113,12 @@ document.addEventListener("DOMContentLoaded",()=>{
 let errOpen=false, errCount=0;
 function errSound(){
   soloBegin(1300);
-  harsh(260); setTimeout(()=>harsh(260),330); setTimeout(()=>harsh(260),660);
+  harsh(260); later(()=>harsh(260),330); later(()=>harsh(260),660);
   buzz([400,150,400,150,400]);
 }
 function readError(sub){
-  errSound();
+  // ★ 2026/09/16: 赤い画面が出ている間に続けて読んでも、音は重ねない（最初の1回だけ鳴らす）
+  if(!errOpen) errSound(); else { try{ if(navigator.vibrate) navigator.vibrate(60); }catch(e){} }
   const f=document.getElementById("errFlash"); if(!f) return;
   errCount = errOpen ? errCount+1 : 1;
   errOpen=true;
@@ -1091,6 +1130,7 @@ function readError(sub){
   try{ const a=document.activeElement; if(a&&a.blur) a.blur(); }catch(e){}
 }
 function closeReadError(){
+  stopAllSounds();
   errOpen=false; errCount=0;
   const f=document.getElementById("errFlash"); if(f) f.classList.remove("on","blink");
 }
@@ -1149,6 +1189,7 @@ function unlockAudio(){
     if(AC && AC.state==="running") return;
     AC=AC||new (window.AudioContext||window.webkitAudioContext)();
     if(AC.state!=="running"){ try{ AC.resume(); }catch(e){} }
+    setTimeout(ensureKeepAlive,0);
     const o=AC.createOscillator(),g=AC.createGain();
     g.gain.value=0.0001;o.connect(g);g.connect(AC.destination);o.start();
     setTimeout(()=>{o.stop();o.disconnect();g.disconnect();},40);
@@ -1710,7 +1751,7 @@ function openGate(){
     "この便の件数：3cm "+c.a+"　5cm "+c.b+"　計 "+(c.a+c.b)+"\n"+
     "数が合わない場合は、その間に通した分を読み直してください。";
   document.getElementById("resumeGate").classList.add("on");
-  if(!gateOpen){ beep(620,180,.08); setTimeout(()=>beep(620,180,.08),260); buzz([150,100,150]); }
+  if(!gateOpen){ beep(620,180,.08); later(()=>beep(620,180,.08),260); buzz([150,100,150]); }
   gateOpen=true;
   refocus();
 }
@@ -1735,7 +1776,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.20";
+const APP_VER="2026-09-16.22";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1899,8 +1940,8 @@ function nextOdd(){
 let oddCur=null;
 function alarmOdd(){
   soloBegin(1200);
-  beep(1400,140,.11); setTimeout(()=>beep(980,140,.11),170); setTimeout(()=>beep(1400,140,.11),340);
-  setTimeout(()=>beep(980,240,.11),510);
+  beep(1400,140,.11); later(()=>beep(980,140,.11),170); later(()=>beep(1400,140,.11),340);
+  later(()=>beep(980,240,.11),510);
   buzz([300,120,300,120,300,120,300]);
 }
 function showOdd(no,size,base){
@@ -2164,17 +2205,19 @@ $("btnFinish").onclick=()=>{
 let startSoundOK=false;
 function startSoundCheck(onOk){
   unlockAudio();
+  stopAllSounds();
   sndReg(3);
-  setTimeout(()=>errSound(),700);
+  later(()=>errSound(),700);
   ask({
     title:"音の確認",
     body:"今、登録音「ピッ」とエラー音「ブッブッブッ」を鳴らしました。\n両方とも聞こえましたか？\n\n聞こえない状態で計数すると、入力漏れに気づけません。",
     okText:"聞こえた（開始する）",
-    onOk:onOk,
+    onOk:()=>{ stopAllSounds(); onOk(); },
     altText:"もう一度鳴らす",
     onAlt:()=>startSoundCheck(onOk),
     alt2Text:"聞こえない",
     onAlt2:()=>{
+      stopAllSounds();
       const mixed=(AMODE==="mixed");
       beep(620,120);
       notify("音が聞こえない場合",
@@ -2249,7 +2292,7 @@ function renderSoon(){                      // 連続読取時は描画をまと
   requestAnimationFrame(()=>{ renderQ=false; render(); });
 }
 function render(){
-  paintRR();
+  paintRR(); ensureKeepAlive();
   if(!inScan()){ showView(); return; }
   const sh=cur();
   const cc=cnt(sh), c3=cc.a, c5=cc.b;
