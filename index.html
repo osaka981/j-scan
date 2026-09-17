@@ -583,15 +583,6 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   </details>
 
   <div id="admInternal">
-    <!-- ★ 2026/09/16: 番号帯の判定（この端末・今日） -->
-    <details id="admHeadBox" style="margin-top:10px;border:1px solid #D6DEE7;border-radius:8px;padding:8px 10px;">
-      <summary style="font-weight:700;cursor:pointer;">番号帯の判定（この端末・今日）</summary>
-      <p class="note">その日の最初の10件で決まった番号帯と、「ゆうパケットだった（以後通す）」で追加された番号帯は、その日の終わりまで警告されません。<br>
-        間違えて追加した場合やテストのあとは、下のボタンでリセットしてください。</p>
-      <p id="admHeadNow" style="font-weight:700;margin:6px 0"></p>
-      <button class="btn wide dim" id="admHeadReset" type="button">今日の番号帯をリセットする</button>
-    </details>
-
     <!-- ★ 2026/09/16: この端末の音の設定（社内用） -->
     <details id="admAudioBox" style="margin-top:10px;border:1px solid #D6DEE7;border-radius:8px;padding:8px 10px;">
       <summary style="font-weight:700;cursor:pointer;">この端末の音の設定</summary>
@@ -1110,28 +1101,6 @@ document.addEventListener("DOMContentLoaded",()=>{
   if(e) e.addEventListener("click",()=>{ unlockAudio(); errSound(); setTimeout(paintAmode,300); });
   const r=document.getElementById("btnRegTest");
   if(r) r.addEventListener("click",()=>{ unlockAudio(); stopAllSounds(); for(let i=0;i<5;i++) later(()=>sndReg(3),i*700); setTimeout(paintAmode,300); });
-  const hb=document.getElementById("admHeadBox");
-  const paintHead=()=>{
-    const el=document.getElementById("admHeadNow"); if(!el) return;
-    const mj=majorHead(), ok=okHeads();
-    el.textContent="正規の番号帯（先頭4桁）："+(ok.length?ok.join("・"):"まだ決まっていません")+
-      "　／　今日の読取 "+S.shifts.reduce((a,sh)=>a+((sh.scans||[]).length),0)+"件"+(mj?"（多数派 "+mj.head+"）":"");
-  };
-  if(hb) hb.addEventListener("toggle",paintHead);
-  const hr=document.getElementById("admHeadReset");
-  if(hr) hr.addEventListener("click",()=>ask({
-    title:"番号帯をリセット",
-    body:"この端末の、今日の正規の番号帯を「いちばん多い番号帯」だけに戻します（今日の読取が10件未満なら、次の10件で決め直します）。\nすでに登録済みの荷物は消えません。",
-    okText:"リセットする",
-    onOk:()=>{
-      // いちばん多い番号帯だけを残す（読取が10件未満なら空にして、次の10件で決め直す）
-      const m=new Map(); let total=0, best=null, bn=0;
-      S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>{ const h=headOf(x.no); m.set(h,(m.get(h)||0)+1); total++; }));
-      m.forEach((v,k)=>{ if(v>bn){ bn=v; best=k; } });
-      S.okHeads=(total>=ODD_MIN&&best)?[best]:[];
-      oddBackDone=false; oddSeen=new Set((S.oddLog||[]).map(x=>x.no)); save(); paintHead(); beep(880,90);
-    }
-  }));
   const ab=document.getElementById("admAudioBox");
   if(ab) ab.addEventListener("toggle",paintAmode);
   paintAmode();
@@ -1807,7 +1776,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.23";
+const APP_VER="2026-09-16.24";
 $("verNote").textContent="版 "+APP_VER;
 async function checkUpdate(){
   if(inScan()) return;
@@ -1896,19 +1865,24 @@ const notify=(title,body)=>ask({title:title,body:body,okText:"閉じる",noCance
 // その日の読取から「先頭4桁の多数派」を求め、そこから外れた番号を警告する
 const ODD_MIN=10, ODD_RATIO=.8, ODD_LEN=4;   // ★ 2026/09/16: 30件→最初の10件で番号帯を決める
 function headOf(no){ return String(no).slice(0,ODD_LEN); }
-function majorHead(){
+/* ★ 2026/09/16 変更: 番号帯は「便ごと」に決める（以前はその日の全便をまとめて判定していた）。
+   便は顧客ごとに分かれるので、複数の顧客を扱う日も顧客ごとに正しく判定できる。
+   便を新しく始めるたびに、最初の10件で決め直す。 */
+function majorHead(sh){
+  sh=sh||cur();
   const m=new Map(); let total=0;
-  S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>{
+  ((sh&&sh.scans)||[]).forEach(x=>{
     const h=headOf(x.no); m.set(h,(m.get(h)||0)+1); total++;
-  }));
+  });
   if(total<ODD_MIN) return null;
   let best=null,cnt2=0;
   m.forEach((v,k)=>{ if(v>cnt2){ cnt2=v; best=k; } });
   return (cnt2/total>=ODD_RATIO)?{head:best,n:cnt2,total:total}:null;
 }
-let oddQ=[], oddOpen=false, oddBackDone=false, oddSeen=new Set();
+let oddQ=[], oddOpen=false, oddBackDone=new Set(),
+    oddSeen=new Set(((typeof S!=="undefined"&&S&&S.oddLog)||[]).map(x=>x.no));   // ★ 再読み込み後に同じ番号を再確認しない
 // 当日に「ゆうパケットだった」と承認した先頭4桁。多数派とあわせて正規の番号帯とする。
-function okHeads(){ S.okHeads=S.okHeads||[]; return S.okHeads; }
+function okHeads(sh){ sh=sh||cur(); if(!sh) return []; sh.okHeads=sh.okHeads||[]; return sh.okHeads; }
 function isOkHead(h){
   if(okHeads().indexOf(h)>=0) return true;
   const mj=majorHead();
@@ -1917,11 +1891,13 @@ function isOkHead(h){
 function addOkHead(h){ if(h&&okHeads().indexOf(h)<0){ okHeads().push(h); saveSoon(); } }
 // 基準ができた時点で、それ以前に読んだ分もさかのぼって点検する
 function backCheckOdd(base){
-  if(oddBackDone) return; oddBackDone=true;
+  const sh=cur(); if(!sh) return;
+  const key=String(sh.id||S.active);
+  if(oddBackDone.has(key)) return; oddBackDone.add(key);
   const hits=[];
-  S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>{
+  (sh.scans||[]).forEach(x=>{
     if(!isOkHead(headOf(x.no))&&!oddSeen.has(x.no)) hits.push({no:x.no,size:x.size,ts:x.ts,base:base,back:true,bin:sh.bin});
-  }));
+  });
   if(!hits.length) return;
   hits.sort((a,b)=>a.ts-b.ts);
   S.oddLog=S.oddLog||[];
@@ -2971,7 +2947,9 @@ function paintSummary(){
   }).join(""):'<p class="note">なし</p>';
 
   $("oddCnt").textContent=(S.oddLog||[]).length?S.oddLog.length+"件":"なし";
-  $("oddHeads").textContent="本日の正規の番号帯："+baseLabel();
+  $("oddHeads").textContent="正規の番号帯（便ごと）："+S.shifts.map(sh=>{
+      const l=(sh.okHeads||[]).join("・"); return l?(sh.bin+(sh.custName?"（"+sh.custName+"）":"")+" "+l):"";
+    }).filter(Boolean).join("　／　")||"—";
   $("oddLog").innerHTML=(S.oddLog||[]).length?S.oddLog.slice().reverse().map(d=>
     '<div class="row" style="background:#F7D6D2;border-color:#A8231C"><span style="flex:1">'+
     '<b class="num" style="color:#A8231C">'+fmt(d.no)+"</b>"+(d.kept?"":' <span class="tag tag3" style="color:#A8231C;border-color:#A8231C;background:#FFF">対象外</span>')+
