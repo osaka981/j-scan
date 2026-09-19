@@ -1778,18 +1778,25 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-16.27";
+const APP_VER="2026-09-19.4";
 $("verNote").textContent="版 "+APP_VER;
+/* ★ 2026/09/19: 顧客用URL(?c=...)のまま更新できるようにする。
+   これまで location.pathname だけで開き直していたため ?c= が消え、
+   顧客専用モードから抜けてしまう。そのため顧客の端末は
+   いつまでも古い版のままだった。読み込みの確認も同じ理由で外していた。 */
 async function checkUpdate(){
   if(inScan()) return;
   try{
-    const r=await fetch(location.pathname+"?chk="+Date.now(),{cache:"no-store"});
+    const base=location.pathname+location.search;
+    const sep=location.search?"&":"?";
+    const r=await fetch(base+sep+"chk="+Date.now(),{cache:"no-store"});
     const t=await r.text(); const m=t.match(/APP_VER="([^"]+)"/);
     if(!m||m[1]===APP_VER) return;
     if(sessionStorage.getItem("jet-upd-try")===m[1]) { $("verNote").textContent="版 "+APP_VER+"（新しい版 "+m[1]+" があります。ブラウザで開き直してください）"; return; }
     sessionStorage.setItem("jet-upd-try",m[1]);
     $("verNote").textContent="新しい版に更新しています";
-    setTimeout(()=>location.replace(location.pathname+"?u="+Date.now()),400);
+    // ?c= を保ったまま開き直す
+    setTimeout(()=>location.replace(base+sep+"u="+Date.now()),400);
   }catch(e){}
 }
 setTimeout(checkUpdate,1500);
@@ -3461,6 +3468,169 @@ const cnt=sh=>{
   sh.c3=a; sh.c5=b; return {a:a,b:b};
 };
 
+/* ══ ★ 2026/09/19: 顧客の利用規約 ══
+   初めてログインした顧客に、一度だけ同意してもらう。
+   同意した事実は顧客ごとにサーバー(jet_customers/<顧客ID>/terms)へ残すので、
+   端末を変えても、ブラウザの記録を消しても、二度目は出ない。
+   文面を改めたら TERMS_VER を上げること。前の版にしか同意していない顧客には
+   もう一度出る（何に同意したかが分からないと、同意を取った意味がないため）。 */
+const TERMS_VER = "2026-09-19.2";
+const TERMS_TEXT = `
+<div style="font-size:13px;font-weight:700;margin-bottom:10px">バーコード計数 実績閲覧サービス　利用規約</div>
+
+<b>第1条（適用）</b><br>
+本規約は、大阪急配株式会社（以下「当社」）が提供するバーコード計数の実績閲覧サービス（以下「本サービス」）の利用条件を定めるものです。本サービスをご利用いただく法人・個人（以下「お客様」）は、本規約に同意したものとみなします。<br><br>
+
+<b>第2条（本サービスの内容）</b><br>
+本サービスでは、当社が読み取った、お客様の荷物の計数実績の閲覧、実績データの書き出し、差出先の登録、パスワードの変更を行えます。当社は、事前の通知なく本サービスの内容を変更し、または提供を終了することがあります。<br><br>
+
+<b>第3条（数量の取扱い）</b><br>
+１．本サービスに表示される数量は<b>当社が読み取った実績</b>であり、実際に引き受けられた数量と一致することを保証するものではありません。読み取りができていない配送物が含まれる場合があります。<br>
+２．正式な数量は、郵便局の引受数によるものとします。<br>
+３．<b>お客様は、本サービスに表示される数量を、当社またはその他の第三者に対する請求、精算、その他金銭の請求の根拠とすることはできません。</b><br><br>
+
+<b>第4条（アカウントの管理）</b><br>
+１．当社はお客様ごとに閲覧用のURLおよびパスワードを発行します。<br>
+２．お客様は、これらを第三者に開示・貸与してはなりません。<br>
+３．パスワードの管理はお客様の責任で行うものとし、当社は、発行済みのパスワードによる利用を、お客様による利用とみなします。<br>
+４．漏えいのおそれがある場合は、速やかに当社へご連絡ください。パスワードは本サービス上で変更できます。<br><br>
+
+<b>第5条（禁止事項）</b><br>
+お客様は、次の行為を行ってはなりません。<br>
+１．本サービスで得た情報を、正当な業務上の必要を超えて第三者へ提供すること<br>
+２．本サービスへの不正なアクセス、解析、改変を試みること<br>
+３．当社または第三者の権利を侵害する行為<br>
+４．その他、法令または公序良俗に反する行為<br><br>
+
+<b>第6条（個人情報の取扱い）</b><br>
+１．当社は、本サービスの利用に伴い、次の情報を取得します。<br>
+　・差出先としてご登録いただいた名称および電話番号<br>
+　・ログインの日時および操作の記録<br>
+２．利用目的は、集荷業務の連絡、実績の照合、本サービスの運用および改善に限ります。<br>
+３．当社は、次の場合を除き、取得した情報を第三者に提供しません。<br>
+　・お客様の同意がある場合<br>
+　・法令に基づく場合<br>
+　・人の生命、身体または財産の保護のために必要であり、お客様の同意を得ることが困難な場合<br>
+４．当社は、取得した情報の漏えい、滅失またはき損の防止その他の安全管理のために、必要かつ適切な措置を講じます。<br>
+５．お客様は、当社に対し、自己に関する情報の開示、訂正、利用停止または削除を求めることができます。下記の窓口までご連絡ください。<br><br>
+
+<b>第7条（データの保存期間）</b><br>
+１．当社は、計数実績を<b>取得の日から3年間</b>保存します。<br>
+２．本サービスの画面で閲覧できるのは、原則として直近の期間に限られます。それ以前の実績が必要な場合は、当社までご連絡ください。<br>
+３．保存期間の経過後、当社は当該データを削除することができます。<br><br>
+
+<b>第8条（サービスの中断・停止）</b><br>
+１．当社は、次の場合、事前の通知なく本サービスの全部または一部を中断することがあります。<br>
+　・設備の保守または障害が発生した場合<br>
+　・通信回線、電力、外部のサービスに障害が発生した場合<br>
+　・天災その他やむを得ない事由が生じた場合<br>
+２．当社は、前項による中断について、第9条に定める範囲を超えて責任を負いません。<br><br>
+
+<b>第9条（免責）</b><br>
+１．<b>当社は、本サービスの利用に関してお客様に生じた損害について、当社の故意または重大な過失による場合を除き、責任を負いません。</b><br>
+２．前項の定めにかかわらず当社が責任を負う場合であっても、その範囲は直接かつ通常の損害に限るものとし、逸失利益、事業機会の喪失その他の間接的な損害は含まれません。<br>
+３．当社は、本サービスの内容が正確であること、中断なく利用できること、お客様の特定の目的に適合することを保証しません。<br><br>
+
+<b>第10条（利用の終了）</b><br>
+１．お客様と当社との取引が終了した場合、当社はアカウントを停止します。<br>
+２．お客様が本規約に違反した場合、当社は事前の通知なくアカウントを停止することができます。<br><br>
+
+<b>第11条（規約の変更）</b><br>
+当社は、必要に応じて本規約を変更することがあります。変更後、本サービスをご利用いただく際に改めて同意をお願いします。<br><br>
+
+<b>第12条（準拠法および管轄）</b><br>
+本規約は日本法に準拠します。本サービスに関して紛争が生じた場合は、<b>大阪地方裁判所</b>を第一審の専属的合意管轄裁判所とします。<br><br>
+
+<div style="border-top:1px solid #e5e5e5;padding-top:10px;margin-top:4px">
+制定　2026年9月19日<br><br>
+大阪急配株式会社　管理部<br>
+〒591-8001　大阪府堺市北区常磐町3-12-5<br>
+TEL 0722589811
+</div>
+`;
+
+function termsAgreedFor(cust){
+  if(!cust) return true;                       // 顧客が分からないときは出さない
+  const t = cust.terms;
+  if(!t) return false;
+  return String(t.ver||"") === TERMS_VER;
+}
+/* 同意画面。同意するまで先へ進ませない。 */
+function showTerms(cust){
+  return new Promise(resolve=>{
+    const ov=document.createElement("div");
+    ov.id="termsOv";
+    ov.style.cssText="position:fixed;inset:0;z-index:99999;background:rgba(20,22,26,.55);"+
+      "display:flex;align-items:center;justify-content:center;padding:16px;";
+    ov.innerHTML=`
+      <div style="background:#fff;border-radius:12px;max-width:560px;width:100%;
+                  max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:16px 20px;border-bottom:1px solid #e5e5e5">
+          <div style="font-size:16px;font-weight:700">ご利用条件</div>
+          <div style="font-size:11px;color:#777;margin-top:2px">${(cust&&cust.name)||""} 様</div>
+        </div>
+        <div id="termsBody" style="flex:1;overflow-y:auto;padding:16px 20px;font-size:12.5px;line-height:1.9;color:#333">
+          ${TERMS_TEXT}
+        </div>
+        <div style="padding:14px 20px;border-top:1px solid #e5e5e5">
+          <div id="termsHint" style="font-size:11px;color:#c0620a;font-weight:600;margin-bottom:8px">
+            ▼ 最後までお読みください
+          </div>
+          <label id="termsWrap" style="display:flex;align-items:flex-start;gap:8px;cursor:not-allowed;opacity:.45;font-size:13px;font-weight:600">
+            <input type="checkbox" id="termsChk" disabled style="margin-top:3px;width:18px;height:18px;flex:none">
+            <span>上記の内容に同意します</span>
+          </label>
+          <button id="termsOk" disabled
+            style="width:100%;margin-top:12px;padding:12px;border:none;border-radius:8px;
+                   background:#ccc;color:#fff;font-size:14px;font-weight:700;cursor:not-allowed">
+            同意して進む
+          </button>
+          <div style="font-size:10.5px;color:#999;margin-top:8px;text-align:center">
+            同意いただけない場合は、この画面をご利用いただけません
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+
+    const body=ov.querySelector("#termsBody");
+    const chk=ov.querySelector("#termsChk");
+    const wrap=ov.querySelector("#termsWrap");
+    const hint=ov.querySelector("#termsHint");
+    const ok=ov.querySelector("#termsOk");
+    // 最後まで読んだらチェックできるようにする
+    const unlock=()=>{
+      chk.disabled=false;
+      wrap.style.opacity="1"; wrap.style.cursor="pointer";
+      hint.style.display="none";
+    };
+    const check=()=>{
+      if(body.scrollHeight - body.clientHeight <= 4){ unlock(); return; }
+      if(body.scrollTop + body.clientHeight >= body.scrollHeight - 8) unlock();
+    };
+    body.onscroll=check; setTimeout(check,150);
+    chk.onchange=()=>{
+      ok.disabled=!chk.checked;
+      ok.style.background=chk.checked?"#1565C0":"#ccc";
+      ok.style.cursor=chk.checked?"pointer":"not-allowed";
+    };
+    ok.onclick=()=>{ ov.remove(); resolve(true); };
+  });
+}
+/* 同意した事実を顧客の記録に残す */
+async function saveTermsAgreed(cust){
+  if(!cust) return;
+  const rec={ ver:TERMS_VER, at:new Date().toISOString() };
+  try{
+    const r=await fbFetch(FB_URL+"/nikki/jet_customers/"+encodeURIComponent(cust.id)+"/terms.json",
+      { method:"PUT", body:JSON.stringify(rec) });
+    if(!r.ok) throw new Error("保存できません");
+    cust.terms=rec;
+    if(JETCUSTS[String(cust.id)]) JETCUSTS[String(cust.id)].terms=rec;
+  }catch(e){
+    console.warn("[規約] 同意を記録できませんでした", e);
+  }
+}
+
 $("btnAdmin").onclick=()=>{
   if(!adminOK){
     ask({title:(isCustMode()?"集荷状況を見る":"管理画面"),
@@ -3486,6 +3656,12 @@ $("btnAdmin").onclick=()=>{
             }catch(e){}
             await loadJetCusts();
             const tc = jetCustBySlug(CUST_SLUG);
+            /* ★ 2026/09/19: 初回は利用条件に同意してもらう。
+               同意するまで画面を開かない。 */
+            if(tc && !termsAgreedFor(tc)){
+              await showTerms(tc);
+              await saveTermsAgreed(tc);
+            }
             isStaff=false; admCustId = tc ? String(tc.id) : null;
             adminOK=true; openAdmin(); return;
           }
@@ -3506,6 +3682,12 @@ $("btnAdmin").onclick=()=>{
           // 旧: 単一の顧客用番号（ジェット1社時代）。顧客マスタ移行までの互換。
           isStaff=false; admCustId = admCustId || S.custId || null;
         } else { notify("暗証番号が違います",""); return; }
+        /* ★ 2026/09/19: 暗証番号で入った顧客にも、初回は利用条件に同意してもらう。
+           社内（isStaff）には出さない。 */
+        if(!isStaff && target && !termsAgreedFor(target)){
+          await showTerms(target);
+          await saveTermsAgreed(target);
+        }
         adminOK=true; openAdmin();
       }});
     return;
@@ -4186,6 +4368,13 @@ loadJetCusts().then(async ()=>{
         window._fbToken=await u.getIdToken();
         custSignedIn=true; isStaff=false;
         const tc=jetCustBySlug(CUST_SLUG);
+        /* ★ 2026/09/19: 自動ログインの経路でも利用条件を出す。
+           ここを通るとパスワードの入力を飛ばすため、同意画面も飛んでいた。
+           文面を改めたときも、この経路で再度出す必要がある。 */
+        if(tc && !termsAgreedFor(tc)){
+          await showTerms(tc);
+          await saveTermsAgreed(tc);
+        }
         admCustId=tc?String(tc.id):null;
         adminOK=true; openAdmin(); return;
       }
