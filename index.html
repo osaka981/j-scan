@@ -1253,12 +1253,23 @@ async function loadSettings(){
 }
 /* ★ 2026/09/12: 発信先は顧客ごと（jet_customers/<id>/postName・postTel）。
    顧客に設定が無い場合は、従来の共通設定（jet_settings）を使う。 */
+/* ★ 2026/09/19: 発信先は顧客ごとの値だけを使う。
+   これまで、その顧客に設定が無いと共通設定(SET)の値を出していた。
+   共通設定にはジェットの大口窓口と電話番号が入っているため、
+   別の顧客の画面にジェットの連絡先が表示されていた。
+   連絡先は顧客ごとに必要なものなので、他社に見せてはならない。
+   顧客が特定できない社内用の画面でだけ、共通設定を使う。 */
 function postOf(custId){
   let c=null;
-  try{ c = jetCustById(custId || S.custId); }catch(e){ c=null; }
-  const nm = (c && c.postName) || SET.postName || "";
-  const tel= (c && c.postTel ) || SET.postTel  || "";
-  return { name:nm, tel:tel, fromCust: !!(c && (c.postName||c.postTel)) };
+  const cid = custId || S.custId;
+  try{ c = jetCustById(cid); }catch(e){ c=null; }
+  if(c){
+    // 顧客が特定できている場合は、その顧客の値のみ（無ければ空）
+    return { name:c.postName||"", tel:c.postTel||"", fromCust:!!(c.postName||c.postTel) };
+  }
+  // 顧客が特定できない＝社内用の画面。従来どおり共通設定を使う
+  if(isCustMode()) return { name:"", tel:"", fromCust:false };
+  return { name:SET.postName||"", tel:SET.postTel||"", fromCust:false };
 }
 async function savePostFor(custId, name, tel){
   const cid = String(custId||"").trim();
@@ -1778,7 +1789,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-19.4";
+const APP_VER="2026-09-19.7";
 $("verNote").textContent="版 "+APP_VER;
 /* ★ 2026/09/19: 顧客用URL(?c=...)のまま更新できるようにする。
    これまで location.pathname だけで開き直していたため ?c= が消え、
@@ -3431,10 +3442,31 @@ function buildLocalDay(date){
   return {date:date,shifts:local?local.shifts.slice():[],ends:(local&&local.ends)||[],
           dupLog:(local&&local.dupLog)||[],delLog:(local&&local.delLog)||[],_local:local||null};
 }
+/* ★ 2026/09/19: 「記録のある日」の出し方。
+   これまで、端末に残っている日と今日の日付を無条件に足していた。
+   そのため一度も使っていない顧客の画面にも日付が並び、開くと
+   「この日のデータがありません」と出る、という紛らわしい状態だった。
+   実際に便があった日だけを出す。顧客の画面では、端末に残っている
+   他の顧客のぶんを混ぜない（規約で貴社に関するものに限ると定めたため）。 */
 function updateDateNote(){
-  const set=new Set(admArchive.map(d=>d.date)); set.add(S.date);
-  admRemoteDates.forEach(d=>set.add(d));
-  $("admDateNote").textContent="記録のある日："+Array.from(set).sort().reverse().join("、");
+  const cid = String(effCustId()||"");
+  const hasShift = d => Array.isArray(d.shifts) && d.shifts.some(sh=>{
+    if(!sh) return false;
+    // 顧客用の画面では、その顧客の便だけを数える
+    if(!isStaff && cid){
+      const sc = String(sh.custId||"");
+      if(sc && sc!==cid) return false;
+    }
+    return (sh.scans&&sh.scans.length) || sh.c3 || sh.c5;
+  });
+  const set=new Set();
+  (admArchive||[]).forEach(d=>{ if(d && d.date && hasShift(d)) set.add(d.date); });
+  if(hasShift(S)) set.add(S.date);              // 今日は実績があるときだけ
+  (admRemoteDates||[]).forEach(d=>set.add(d));  // サーバーのぶんは顧客で絞られている
+  const list=Array.from(set).sort().reverse();
+  $("admDateNote").textContent = list.length
+    ? "記録のある日："+list.join("、")
+    : "まだ記録がありません";
 }
 function readArchive(){
   try{
@@ -3666,28 +3698,32 @@ $("btnAdmin").onclick=()=>{
             adminOK=true; openAdmin(); return;
           }
           if(r.reason==="bad"){ notify("パスワードが違います",""); return; }
-          // noaccount / sdk → 従来の暗証番号で照合する
+          /* ★ 2026/09/19: 顧客の暗証番号による入口は廃止。
+             アカウント（ID+パスワード）に一本化する。
+             入口が2つあると、誰がどちらで入ったか分からず、
+             桁数の少ない暗証番号のほうが先に破られる。
+             アカウントが未発行の顧客は、発行するまで開けない。 */
+          if(r.reason==="noaccount"){
+            notify("アカウントが未発行です",
+              "大阪急配へご連絡ください。ID とパスワードを発行します。");
+            return;
+          }
+          notify("ログインできませんでした",
+            "通信の状態をご確認のうえ、もう一度お試しください。");
+          return;
         }
         let h="";
         try{ h=await pinHash(t); }
         catch(e){ notify("照合できませんでした",""); return; }
+        // ここへ来るのは社内用（?c= なし）のみ
         await loadJetCusts();
-        const target = isCustMode() ? jetCustBySlug(CUST_SLUG) : null;
         if(h===PIN_STAFF_H){
           isStaff=true;
-          admCustId = admCustId || (target && target.id) || S.custId || null;
-        } else if(target && target.pinHash && h===target.pinHash){
-          isStaff=false; admCustId=String(target.id);
-        } else if(!isCustMode() && h===PIN_CLIENT_H){
-          // 旧: 単一の顧客用番号（ジェット1社時代）。顧客マスタ移行までの互換。
+          admCustId = admCustId || S.custId || null;
+        } else if(h===PIN_CLIENT_H){
+          // 旧: 単一の顧客用番号（ジェット1社時代）。社内での閲覧用に残す。
           isStaff=false; admCustId = admCustId || S.custId || null;
         } else { notify("暗証番号が違います",""); return; }
-        /* ★ 2026/09/19: 暗証番号で入った顧客にも、初回は利用条件に同意してもらう。
-           社内（isStaff）には出さない。 */
-        if(!isStaff && target && !termsAgreedFor(target)){
-          await showTerms(target);
-          await saveTermsAgreed(target);
-        }
         adminOK=true; openAdmin();
       }});
     return;
