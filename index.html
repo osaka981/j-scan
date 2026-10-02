@@ -1665,6 +1665,39 @@ async function fetchJetNos(custId,date,allowLegacy){
   }catch(e){ return null; }
 }
 const keyOf=sh=>sh._key||shiftKey(sh);
+
+/* ★ 2026-10-02.1: 経営管理で入れた「引受数の訂正」(nikki/jet_adjust) を読むだけ取り込む。
+   ・読むのは社内の暗証番号(1108)で開いたときだけ。顧客用の暗証番号や顧客用URLでは
+     取得そのものを行わないので、データが端末に来ない＝表示に出る余地がない。
+   ・書き込みは一切しない。スキャンデータ(jet_scan)も読取番号も触らない。
+   ・便のキーは経営管理と同じ（shiftPayload が書く key = keyOf(sh)）。 */
+let JET_ADJ = {};
+async function loadJetAdj(force){
+  if(!isStaff){ JET_ADJ = {}; return JET_ADJ; }           // 顧客には読みに行かない
+  try{ if(typeof isCustMode==="function" && isCustMode() && !isStaff){ JET_ADJ={}; return JET_ADJ; } }catch(e){}
+  if(!force && JET_ADJ && Object.keys(JET_ADJ).length) return JET_ADJ;
+  try{
+    const r = await fbFetch(FB_URL+"/nikki/jet_adjust.json");
+    const v = await r.json();
+    JET_ADJ = (v && typeof v==="object") ? v : {};
+  }catch(e){ console.warn("[jet_adjust] 取得できませんでした", e); JET_ADJ = {}; }
+  return JET_ADJ;
+}
+/* 便に訂正が入っているか。入っていれば訂正後の数量を返す。
+   引受数は空欄なら計数値のまま計上される（経営管理と同じ考え方）。 */
+function jetAdjOf(sh){
+  if(!isStaff || !sh) return null;
+  const a = JET_ADJ && JET_ADJ[keyOf(sh)];
+  if(!a) return null;
+  const has = v => v!==null && v!==undefined && v!=="";
+  const c = (typeof cnt==="function") ? cnt(sh) : {a:0,b:0};
+  const s3 = c.a||0, s5 = c.b||0;
+  const f3 = has(a.c3) ? Number(a.c3)||0 : s3;
+  const f5 = has(a.c5) ? Number(a.c5)||0 : s5;
+  const carrier = has(a.carrierName) ? String(a.carrierName) : "";
+  if(f3===s3 && f5===s5 && !carrier && !a.reason) return null;
+  return { s3, s5, f3, f5, carrier, reason:a.reason||"", changed:(f3!==s3||f5!==s5) };
+}
 // 同じドライバー（IDが同じ。IDが無ければ氏名）の便を数える
 function sameDriver(sh,id,name){
   const a=normId(id), n=(name||"").trim();
@@ -1807,7 +1840,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-09-19.11";
+const APP_VER="2026-10-02.1";
 $("verNote").textContent="版 "+APP_VER;
 /* ★ 2026/09/19: 顧客用URL(?c=...)のまま更新できるようにする。
    これまで location.pathname だけで開き直していたため ?c= が消え、
@@ -3867,6 +3900,14 @@ function paintAdmCust(){
   sel.innerHTML=list.map(c=>`<option value="${c.id}"${String(admCustId)===String(c.id)?" selected":""}>${c.name||("顧客"+c.id)}</option>`).join("");
 }
 function openAdmin(){
+  // ★ 2026-10-02.1: 引受数の訂正を取り込んでから描き直す（社内のときだけ）
+  try{
+    if(isStaff && typeof loadJetAdj==="function"){
+      loadJetAdj(true).then(()=>{
+        try{ if(admCurDay && typeof paintAdminDay==="function") paintAdminDay(admCurDay, true); }catch(e){}
+      });
+    } else { JET_ADJ = {}; }
+  }catch(e){}
   // ★ 2026/09/12: 顧客用URLのときだけ出すもの（パスワード変更・注意書き・お気に入り案内）
   const _custOnly=(isCustMode()&&!isStaff);
   const pinBox=$("admPinBox");
@@ -3980,6 +4021,7 @@ if(_btnPinChange) _btnPinChange.onclick=async ()=>{
 };
 $("btnAdmLogout").onclick=async ()=>{
   adminOK=false; isStaff=false;
+  JET_ADJ = {};                      // ★ 2026-10-02.1: 訂正の控えも捨てる
   // ★ 2026/09/12: 顧客アカウントのログインも解除する（自動で開かなくなる）
   try{ localStorage.removeItem(CUST_REMEMBER_LS); }catch(e){}
   if(custSignedIn){
@@ -3996,6 +4038,7 @@ let admLast=Date.now();
 setInterval(()=>{
   if(adminOK && Date.now()-admLast>15*60*1000){
     adminOK=false; isStaff=false;
+    JET_ADJ = {};                    // ★ 2026-10-02.1: 訂正の控えも捨てる
     if($("shAdmin").classList.contains("on")||$("shDetail").classList.contains("on")) closeSheets();
   }
 },30000);
@@ -4068,13 +4111,24 @@ function paintAdminDay(day,remoteLoaded){
                        :'<span class="badge b-open">計数中</span>';
     const callBtn=(isStaff&&sh.tel)?' <a class="btn sm" style="padding:4px 10px;margin-left:6px;text-decoration:none;color:var(--blue);border-color:#8FB4D8;background:var(--blue-bg)" href="tel:'+sh.tel.replace(/[^0-9+]/g,"")+'" onclick="event.stopPropagation()">発信</a>':"";
     const pick=isStaff?'<input type="checkbox" class="pick" data-k="'+keyOf(sh)+'" onclick="event.stopPropagation()" style="width:18px;height:18px;margin-right:8px;vertical-align:-3px">':"";
+    /* ★ 2026-10-02.1: 経営管理で引受数を訂正した便だけ、訂正後の数量を出す。
+       社内（1108）で開いたときだけ。顧客の画面には出さない。 */
+    const adj = (typeof jetAdjOf==="function") ? jetAdjOf(sh) : null;
+    const adjLine = adj ? '<div class="meta" style="color:#8A4B00;font-weight:700">経営管理で訂正'
+        + (adj.changed ? ("　通常 "+adj.s3+" → "+adj.f3+"　5cm "+adj.s5+" → "+adj.f5) : "")
+        + (adj.carrier ? ("　運搬 "+adj.carrier) : "")
+        + (adj.reason ? ("　"+adj.reason) : "")
+        + '</div>' : "";
+    const qtyCell = (adj && adj.changed)
+      ? '<div class="qty num" style="line-height:1.15"><div style="font-size:11px;font-weight:600;color:#8A9AA8;text-decoration:line-through">'+(adj.s3+adj.s5)+'</div>'+(adj.f3+adj.f5)+'</div>'
+      : '<div class="qty num">'+(c.a+c.b)+'</div>';
     return '<div class="admrow" data-i="'+i+'"><div class="a1"><div class="ttl">'+pick+_binLabel(sh,_ord)+"　"+(sh.driver||"")+callBtn+"</div>"+
       '<div class="meta">開始 '+hhmm(sh.startedAt)+"　締め "+(sh.closedAt?hhmm(sh.closedAt):"未締め")+
       ((sh.carrierName&&sh.carrierName!==sh.driver)?"　<b style='color:#8A4B00'>運搬 "+sh.carrierName+"</b>":"")+
       (isStaff?"　"+corpName(sh.corp)+(sh.driverId?" / "+sh.driverId:"")+(sh.registered===false?"　<b style='color:#A8231C'>未登録</b>":""):"")+
-      ((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+bad+
+      ((isStaff&&sh.tel)?"　"+sh.tel:"")+"</div>"+adjLine+bad+
       '<div class="hint">タップで読取一覧とCSV</div>'+
-      '</div><div class="qty num">'+(c.a+c.b)+'</div><div class="chev">›</div></div>';
+      '</div>'+qtyCell+'<div class="chev">›</div></div>';
   }).join(""):'<p class="note">便がありません</p>')+
     (ends.length?'<div class="lhead" style="margin-top:10px">業務終了</div>'+ends.map(e=>
       '<div class="row"><span style="flex:1"><b>'+e.driver+'</b></span><span class="tm num" style="font-size:14px;font-weight:700">'+hhmm(e.ts)+"</span></div>").join(""):"");
