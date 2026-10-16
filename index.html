@@ -1135,12 +1135,17 @@ function errSound(){
   harsh(260); later(()=>harsh(260),330); later(()=>harsh(260),660);
   buzz([400,150,400,150,400]);
 }
-function readError(sub){
+/* ★ 2026-10-15.1: 3行目の文面を差し替えられるようにした（検査数字のエラーでは
+   「12桁を読んでください」では意味が通らないため）。省略すれば今までの文面。 */
+const ERR_NOTE_DEFAULT="カウントしていません。<br>12桁のお問い合わせ番号を読んでください。";
+function readError(sub,note){
   // ★ 2026/09/16: 続けて読んだときも毎回鳴らすが、前の音は止めてから鳴らす（音を重ねない）
   stopAllSounds(); errSound();
   const f=document.getElementById("errFlash"); if(!f) return;
   errCount = errOpen ? errCount+1 : 1;
   errOpen=true;
+  const nt=document.getElementById("errFlashNote");
+  if(nt) nt.innerHTML = note || ERR_NOTE_DEFAULT;
   document.getElementById("errFlashSub").textContent=sub||"";
   document.getElementById("errFlashCnt").textContent =
     errCount>1 ? "確認前に読んだ "+(errCount-1)+" 件もカウントしていません。読み直してください" : "";
@@ -1840,7 +1845,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-10-02.1";
+const APP_VER="2026-10-16.1";
 $("verNote").textContent="版 "+APP_VER;
 /* ★ 2026/09/19: 顧客用URL(?c=...)のまま更新できるようにする。
    これまで location.pathname だけで開き直していたため ?c= が消え、
@@ -2108,6 +2113,21 @@ $("oddDrop").onclick=()=>{ stopAllSounds();
 };
 
 /* ---------- 読取 ---------- */
+/* ★ 2026-10-15.1: お問い合わせ番号の検査数字チェック。
+   12桁目は「上11桁 ÷ 7 の余り」になっている。
+   2026/09/03〜10/02 に実際に読んだ 50,813件すべてで成立していたので、
+   ここが合わない番号はリーダーの誤読か打ち間違いとみなしてその場で止める。
+   ただし番号体系の違う荷物（国際小包など）を弾き続けると業務が止まるため、
+   同じ番号を続けて2回読んだときは、2回目でそのまま登録できるようにしている。
+   （誤読なら2回続けて同じ数字にはならない。本物の別体系なら2回とも同じ数字になる） */
+function chkDigitOK(no){
+  try{
+    const s=String(no);
+    if(!/^\d{12}$/.test(s)) return true;      // 桁の判定は別の場所で済んでいる
+    return (Number(s.slice(0,11)) % 7) === Number(s[11]);
+  }catch(e){ return true; }                   // 計算できないときは止めない
+}
+let _ngNo="";                                 // 直前に検査数字で止めた番号
 let seenIdx=null;
 function buildSeen(){ seenIdx=new Map(); S.shifts.forEach(sh=>(sh.scans||[]).forEach(x=>seenIdx.set(x.no,true))); }
 function handle(raw){
@@ -2124,6 +2144,21 @@ function handle(raw){
     setBand("dup","12桁ではありません",no,no.length+"桁を読み取りました。カウントしていません");
     readError(no.length+"桁のバーコードを読みました（カウントしていません）"); return;
   }
+  /* ★ 2026-10-15.1: 検査数字が合わない番号を止める（2回続けて同じなら通す） */
+  if(!chkDigitOK(no)){
+    if(_ngNo!==no){
+      _ngNo=no;
+      setBand("dup","読み取りに失敗しています",no,"番号の作りが合いません。カウントしていません");
+      readError("もう一度、同じ荷物を読んでください",
+        "番号の最後の1桁が合いません。読み間違いの可能性が高いです。<br>"+
+        "「確認した」を押してから同じ荷物を読み直してください。<br>"+
+        "同じ番号がもう一度出たときは、そのまま登録します。");
+      return;
+    }
+    // 2回続けて同じ番号 → 別の番号体系の荷物とみなして通す
+  }
+  _ngNo="";
+
   if(seenIdx.has(no)){
     const first=findFirst(no);
     if(first){ showDup(no,first); return; }
@@ -3602,8 +3637,10 @@ function updateDateNote(){
   if(hasShift(S)) set.add(S.date);              // 今日は実績があるときだけ
   (admRemoteDates||[]).forEach(d=>set.add(d));  // サーバーのぶんは顧客で絞られている
   const list=Array.from(set).sort().reverse();
+  /* ★ 2026-10-16.1: 日付を全部並べていたため、日が経つほど行が伸びて読みにくくなっていた。
+     件数だけにする。どの日に記録があるかは下の一覧を見れば分かる。 */
   $("admDateNote").textContent = list.length
-    ? "記録のある日："+list.join("、")
+    ? "記録のある日　"+list.length+"日分"
     : "まだ記録がありません";
 }
 function readArchive(){
@@ -4194,7 +4231,8 @@ function openPhotoSheet(){
   loadPhShifts();
   fetchRemoteDates().then(()=>{
     const set=new Set(admRemoteDates); set.add(S.date);
-    const txt="記録のある日："+Array.from(set).sort().reverse().slice(0,10).join("、");
+    /* ★ 2026-10-16.1: 日付を並べると行が長くなるので件数だけにする（管理画面と揃える） */
+    const txt="記録のある日　"+set.size+"日分";
     if(!/記録がありません/.test($("phDateNote").textContent)) $("phDateNote").textContent=txt;
   });
 }
@@ -4613,7 +4651,7 @@ try{
 <div id="errFlash" role="alertdialog" aria-modal="true">
   <div class="t1">読み直してください</div>
   <div class="t2" id="errFlashSub"></div>
-  <div class="t3">カウントしていません。<br>12桁のお問い合わせ番号を読んでください。</div>
+  <div class="t3" id="errFlashNote">カウントしていません。<br>12桁のお問い合わせ番号を読んでください。</div>
   <div class="cnt" id="errFlashCnt"></div>
   <button type="button" id="errAck">確認した</button>
 </div>
