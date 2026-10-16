@@ -547,6 +547,21 @@ select.day{width:100%;padding:11px 12px;font-size:16px;font-family:inherit;color
   <div class="field"><label for="admDate">日付</label>
     <input id="admDate" type="date" style="padding:11px 12px;font-size:16px;font-family:inherit;color:var(--ink);border:1.5px solid #7F94AA;border-radius:8px;background:#FFF">
     <p class="note" id="admDateNote"></p></div>
+  <!-- ★ 2026-10-17.1: 発伝CSV（ゆうプリ）の取込。
+       送るのは12桁のお問い合わせ番号だけ。お届け先の名称と住所は端末の中だけに残す。 -->
+  <div id="shipBox" class="hide"
+    style="border:1px solid #D6DEE7;border-radius:8px;padding:10px 12px;margin:10px 0;">
+    <div style="font-weight:700;font-size:15px;margin-bottom:4px;">発送データの取込</div>
+    <p class="note" style="margin:0 0 8px;">
+      ゆうプリの発伝CSVを選ぶと、<b>12桁のお問い合わせ番号だけ</b>を送ります。<br>
+      お届け先の名称と住所は送られず、この端末の中だけに残ります（7日で自動的に消えます）。
+    </p>
+    <input type="file" id="shipFile" accept=".csv,text/csv" style="display:none">
+    <button class="btn wide" id="btnShipPick">発伝CSVを選ぶ</button>
+    <p class="note" id="shipMsg" style="margin:8px 0 0;"></p>
+    <div id="shipNow" style="margin-top:6px;"></div>
+  </div>
+
   <div id="admSummary"></div>
   <h3>便の一覧</h3>
   <div id="admList"></div>
@@ -1646,6 +1661,205 @@ async function fetchJetScan(custId,date,allowLegacy){
   }catch(e){ return null; }
 }
 const shCustId=sh=>String((sh&&sh.custId)||S.custId||"_legacy");
+
+/* ════════════════════════════════════════════════════════════
+   ★ 2026-10-17.1: 発伝CSV（ゆうプリ）の取込
+   顧客が出した発送データを計数と突き合わせるための下ごしらえ。
+
+   送るのは12桁のお問い合わせ番号だけ。
+   お届け先の名称と住所はサーバへ送らず、この端末の中（IndexedDB）に置く。
+   そうすれば、弊社は顧客の顧客の個人情報を一切預からずに済む。
+   突合の計算は番号だけで成立するので、これで何も困らない。
+
+   置き場所: nikki/jet_ship/<顧客ID>/<日付>
+     { at:取込時刻, by:取込んだ人のuid, n:件数, nos:{ "281733120093":1, ... } }
+   番号を配列ではなく連想配列にしているのは、2回目の取込で足すときに
+   重複をそのまま吸収できるため。
+   ════════════════════════════════════════════════════════════ */
+const jetShipPath=(custId,date)=>
+  "/nikki/jet_ship/"+encodeURIComponent(String(custId||"").trim())+"/"+encodeURIComponent(date);
+
+/* ---- 端末の中に置く発伝の明細（届け先つき）---- */
+const SHIP_DB_NAME="jet-ship", SHIP_STORE="rows", SHIP_KEEP_DAYS=7;
+function _shipDB(){
+  return new Promise((res,rej)=>{
+    try{
+      const q=indexedDB.open(SHIP_DB_NAME,1);
+      q.onupgradeneeded=()=>{ try{ q.result.createObjectStore(SHIP_STORE); }catch(e){} };
+      q.onsuccess=()=>res(q.result);
+      q.onerror=()=>rej(q.error);
+    }catch(e){ rej(e); }
+  });
+}
+const _shipKey=(custId,date)=>String(custId||"")+"|"+String(date||"");
+async function shipSaveRows(custId,date,rows){
+  try{
+    const db=await _shipDB();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction(SHIP_STORE,"readwrite");
+      tx.objectStore(SHIP_STORE).put({at:Date.now(),date:date,rows:rows},_shipKey(custId,date));
+      tx.oncomplete=res; tx.onerror=()=>rej(tx.error);
+    });
+    shipPurgeOld();                       // 古いぶんは置いておかない
+  }catch(e){ console.warn("[発伝] 端末への保存に失敗",e); }
+}
+async function shipLoadRows(custId,date){
+  try{
+    const db=await _shipDB();
+    return await new Promise((res)=>{
+      const tx=db.transaction(SHIP_STORE,"readonly");
+      const g=tx.objectStore(SHIP_STORE).get(_shipKey(custId,date));
+      g.onsuccess=()=>res(g.result||null); g.onerror=()=>res(null);
+    });
+  }catch(e){ return null; }
+}
+async function shipPurgeOld(){
+  try{
+    const db=await _shipDB();
+    const limit=Date.now()-SHIP_KEEP_DAYS*86400000;
+    const tx=db.transaction(SHIP_STORE,"readwrite");
+    const st=tx.objectStore(SHIP_STORE);
+    const cur=st.openCursor();
+    cur.onsuccess=e=>{
+      const c=e.target.result; if(!c) return;
+      if(!c.value || !c.value.at || c.value.at<limit) st.delete(c.key);
+      c.continue();
+    };
+  }catch(e){}
+}
+
+/* ---- CSVの読み取り ---- */
+/* ゆうプリのCSVは Shift-JIS。UTF-8で保存し直されている場合もあるので両方試す。 */
+function shipDecode(buf){
+  const tryOne=enc=>{ try{ return new TextDecoder(enc).decode(buf); }catch(e){ return ""; } };
+  const sj=tryOne("shift_jis");
+  if(sj && sj.indexOf("お問い合わせ番号")>=0) return sj;
+  const u8=tryOne("utf-8");
+  if(u8 && u8.indexOf("お問い合わせ番号")>=0) return u8;
+  return sj || u8 || "";
+}
+/* 引用符つきのセルに対応した素朴なCSVの分解 */
+function shipParseCSV(text){
+  const rows=[]; let row=[], cell="", q=false;
+  const s=String(text||"").replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(q){
+      if(c==='"'){ if(s[i+1]==='"'){ cell+='"'; i++; } else q=false; }
+      else cell+=c;
+    }else{
+      if(c==='"') q=true;
+      else if(c===","){ row.push(cell); cell=""; }
+      else if(c==="\n"){ row.push(cell); rows.push(row); row=[]; cell=""; }
+      else cell+=c;
+    }
+  }
+  if(cell!=="" || row.length){ row.push(cell); rows.push(row); }
+  return rows.filter(r=>r.some(x=>String(x).trim()!==""));
+}
+const _shipNorm=s=>String(s||"").replace(/^﻿/,"").replace(/[\s　"]/g,"");
+/* 見出しから欲しい列の位置を探す。列が増えても name で引くので壊れない。 */
+function shipFindCols(head){
+  const h=head.map(_shipNorm);
+  const find=(...keys)=>{
+    for(const k of keys){ const i=h.findIndex(x=>x.indexOf(k)>=0); if(i>=0) return i; }
+    return -1;
+  };
+  return {
+    no:   find("お問い合わせ番号","問い合わせ番号","追跡番号"),
+    name: find("お届け先名称","届け先名称","お届け先名","届け先名"),
+    ad1:  find("お届け先住所","届け先住所"),
+    ad2:  (()=>{ const idx=[]; h.forEach((x,i)=>{ if(x.indexOf("住所")>=0) idx.push(i); }); return idx[1]!=null?idx[1]:-1; })(),
+  };
+}
+
+/* ---- 取り込みの本体 ---- */
+let _shipBusy=false;
+async function shipImport(file){
+  const cid=effCustId(), date=admDate||S.date;
+  const msg=$("shipMsg");
+  const say=(t,bad)=>{ if(msg){ msg.innerHTML=t; msg.style.color=bad?"#C4271D":""; } };
+  if(!cid){ say("顧客が分かりません。先に顧客を選んでください。",true); return; }
+  if(_shipBusy) return;
+  _shipBusy=true;
+  try{
+    say("読み込んでいます…");
+    const text=shipDecode(await file.arrayBuffer());
+    const rows=shipParseCSV(text);
+    if(rows.length<2){ say("中身を読み取れませんでした。ゆうプリの発伝CSVか確認してください。",true); return; }
+    const col=shipFindCols(rows[0]);
+    if(col.no<0){ say("「お問い合わせ番号」の列が見つかりません。",true); return; }
+
+    const nos={}, keep=[]; let bad=0, dup=0, ng=0;
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i];
+      const no=String(r[col.no]==null?"":r[col.no]).replace(/[^0-9]/g,"");
+      if(!/^\d{12}$/.test(no)){ bad++; continue; }
+      if(!chkDigitOK(no)){ ng++; continue; }       // 番号の作りが合わない行は入れない
+      if(nos[no]){ dup++; continue; }
+      nos[no]=1;
+      keep.push({no:no,
+        name:col.name>=0?String(r[col.name]||"").trim():"",
+        ad:[col.ad1>=0?r[col.ad1]:"", col.ad2>=0?r[col.ad2]:""].map(x=>String(x||"").trim()).filter(Boolean).join(" ")});
+    }
+    const n=Object.keys(nos).length;
+    if(!n){ say("12桁のお問い合わせ番号が1件も見つかりませんでした。",true); return; }
+
+    // 既に入っているぶんに足す（置き換えない）
+    let prev={};
+    try{
+      const r=await fbFetch(FB_URL+jetShipPath(cid,date)+".json");
+      const v=await r.json();
+      if(v && !v.error && v.nos) prev=v.nos;
+    }catch(e){}
+    const merged=Object.assign({},prev,nos);
+    const added=Object.keys(merged).length-Object.keys(prev).length;
+
+    const uid=(window._fbAuth&&window._fbAuth.currentUser&&window._fbAuth.currentUser.uid)||"";
+    const res=await fbFetch(FB_URL+jetShipPath(cid,date)+".json",
+      {method:"PUT",headers:{"Content-Type":"application/json"},
+       body:JSON.stringify({at:Date.now(),by:uid,n:Object.keys(merged).length,nos:merged})});
+    if(!res.ok){ say("送れませんでした（"+res.status+"）。通信の状態を確認してください。",true); return; }
+
+    // 届け先つきの明細は端末の中だけ。前のぶんと混ぜる。
+    const old=await shipLoadRows(cid,date);
+    const byNo={}; ((old&&old.rows)||[]).forEach(x=>{ if(x&&x.no) byNo[x.no]=x; });
+    keep.forEach(x=>{ byNo[x.no]=x; });
+    await shipSaveRows(cid,date,Object.values(byNo));
+
+    say("<b>"+date+" に "+Object.keys(merged).length+"件</b> を登録しました"
+      + (added!==n ? "（うち今回の追加 "+added+"件）" : "")
+      + (dup?"　／　同じ番号 "+dup+"件":"")
+      + (ng?"　／　番号の作りが合わない行 "+ng+"件":"")
+      + (bad?"　／　番号でない行 "+bad+"件":""));
+    shipPaint();
+  }catch(e){
+    say("取り込めませんでした。"+((e&&e.message)||""),true);
+  }finally{ _shipBusy=false; }
+}
+
+/* ---- いま入っている発伝の件数を出す ---- */
+async function shipPaint(){
+  const box=$("shipBox"); if(!box) return;
+  const cid=effCustId();
+  box.className = cid ? "" : "hide";
+  if(!cid) return;
+  const date=admDate||S.date, el=$("shipNow");
+  if(!el) return;
+  el.textContent="";
+  try{
+    const r=await fbFetch(FB_URL+jetShipPath(cid,date)+".json");
+    const v=await r.json();
+    const n=(v&&!v.error&&v.n)?v.n:0;
+    const local=await shipLoadRows(cid,date);
+    el.innerHTML = n
+      ? '<span class="note">'+date+' の発伝　<b>'+n+'件</b>'
+        + (local&&local.rows&&local.rows.length ? '　／　この端末に届け先 '+local.rows.length+'件' : '　／　この端末に届け先なし（別の端末で取り込んだぶん）')
+        + '</span>'
+      : '<span class="note">'+date+' の発伝はまだ入っていません</span>';
+  }catch(e){ el.innerHTML='<span class="note">発伝の件数を確認できませんでした</span>'; }
+}
+
 // 番号明細も同じ考え方で顧客ごとに分ける。顧客が分からない便は旧形式の位置。
 const jetNosPath=(custId,date,key)=>{
   const c=String(custId||"").trim();
@@ -1845,7 +2059,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-10-16.1";
+const APP_VER="2026-10-17.1";
 $("verNote").textContent="版 "+APP_VER;
 /* ★ 2026/09/19: 顧客用URL(?c=...)のまま更新できるようにする。
    これまで location.pathname だけで開き直していたため ?c= が消え、
@@ -3995,6 +4209,7 @@ function openAdmin(){
   admDate=admDate&&days.includes(admDate)?admDate:S.date;
   $("admDate").value=admDate;
   updateDateNote();
+  try{ shipPaint(); }catch(e){}                                      // ★ 2026-10-17.1
   renderAdmin(); openSheet("shAdmin");
 }
 // ★ 2026/09/12: 社内用で開いたときの顧客切替
@@ -4003,9 +4218,19 @@ if(_admCustSel) _admCustSel.onchange=function(){
   admCustId=this.value||null;
   admArchive=readArchive();
   fetchRemoteDates().then(updateDateNote);
+  try{ shipPaint(); }catch(e){}                                      // ★ 2026-10-17.1
   renderAdmin();
 };
-$("admDate").onchange=function(){ admDate=this.value||S.date; this.blur(); renderAdmin(); };
+$("admDate").onchange=function(){ admDate=this.value||S.date; this.blur(); renderAdmin();
+  try{ shipPaint(); }catch(e){} };                                   // ★ 2026-10-17.1
+/* ★ 2026-10-17.1: 発伝CSVの取込の結線 */
+(function(){
+  const b=$("btnShipPick"), f=$("shipFile");
+  if(b && f){
+    b.onclick=()=>{ f.value=""; f.click(); };
+    f.onchange=function(){ const x=this.files&&this.files[0]; if(x) shipImport(x); };
+  }
+})();
 $("admDate").addEventListener("click",function(){ try{ if(this.showPicker&&!("ontouchstart" in window)) this.showPicker(); }catch(e){} });
 // ★ 2026/09/16: 端末アカウントの結線
 const _btnDevToggle=$("btnDevAcctToggle"), _lineDev=$("devAcctLine"), _btnDevLogin=$("btnDevAcctLogin");
