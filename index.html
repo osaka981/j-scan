@@ -1526,12 +1526,41 @@ async function loadMaster(force){
   }catch(e){}
   if(!force){ try{ const c=JSON.parse(localStorage.getItem(MKEY)||"null"); if(c&&Date.now()-c.at<30*60*1000){ MASTER=c; return c; } }catch(e){} }
   try{
+    /* ★ 2026-10-17.2: 登録データは「名前だけの写し」から読む。
+
+       これまで nikki/drivers と nikki/companies をそのまま読んでいた。
+       drivers には全員の生年月日とPINのハッシュ、companies には口座情報・
+       インボイス番号・顧客ごとの単価が入っていて、ここで使う3〜4項目の
+       ために、それが全部スキャン端末に流れていた。
+
+       経営管理が nikki/pub/ に金額と個人情報を落とした写しを書き出すので、
+       そちらを読む。写しが空のときだけ、今までのノードを読む。
+       だから差し替えの順番を気にしなくてよい。
+
+       needKey は「写しが新しい形かどうか」の目印。経営管理を古い版のまま
+       写すと、写しはあるのに項目が足りない状態になる。そのまま使うと
+       局へ運ぶ人が誰も出なくなるので、目印が無ければ古いノードを読む。 */
+    const pickNode=async(pubPath,oldPath,needKey)=>{
+      try{
+        const a=asArr(await fbFetch(FB_URL+pubPath).then(r=>r.json()));
+        if(a.length && a.some(x=>x && x[needKey]!==undefined)){
+          console.log("[写し] "+pubPath+" から読みました "+a.length+"件"); return a;
+        }
+        if(a.length) console.warn("[写し] "+pubPath+" が古い形です（"+needKey+"が無い）。経営管理で写し直してください");
+      }catch(e){}
+      console.warn("[写し] "+oldPath+" を読みます");
+      try{ return asArr(await fbFetch(FB_URL+oldPath).then(r=>r.json())); }catch(e){ return []; }
+    };
     const [d,c]=await Promise.all([
-      fbFetch(FB_URL+"/nikki/drivers.json").then(r=>r.json()),
-      fbFetch(FB_URL+"/nikki/companies.json").then(r=>r.json())
+      pickNode("/nikki/pub/staff.json","/nikki/drivers.json","officeType"),
+      pickNode("/nikki/pub/companies.json","/nikki/companies.json","custIds")
     ]);
+    /* ★ 2026-10-17.2: uid と empNoHistory をここで捨てていたため、
+       findDriver の「社員番号が変わった人も同じ人に寄せる」判定
+       (2026/09/14に入れたもの)がずっと効いていなかった。一緒に拾う。 */
     MASTER={drivers:asArr(d).map(x=>({id:String(x.id||""),empNo:String(x.empNo||""),driverNo:String(x.driverNo||""),
       name:x.name||"",tel:x.tel||"",company:x.company||"",
+      uid:String(x.uid||""),empNoHistory:Array.isArray(x.empNoHistory)?x.empNoHistory.map(String):[],
       officeType:x.officeType||"",workType:x.workType||"",retired:!!x.retired})),
       companies:asArr(c).map(x=>({code:String(x.companyCode||""),name:x.name||"",owner:String(x.ownerLoginId||"")})),at:Date.now()};
     try{ localStorage.setItem(MKEY,JSON.stringify(MASTER)); }catch(e){}
@@ -2059,7 +2088,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* ---------- 版の確認と自動更新（開始画面でのみ） ---------- */
-const APP_VER="2026-10-17.1";
+const APP_VER="2026-10-17.2";
 $("verNote").textContent="版 "+APP_VER;
 /* ★ 2026/09/19: 顧客用URL(?c=...)のまま更新できるようにする。
    これまで location.pathname だけで開き直していたため ?c= が消え、
